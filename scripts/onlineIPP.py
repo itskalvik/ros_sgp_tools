@@ -10,7 +10,7 @@ from sgp_ipp.models.transformations import FixedInducingTransformer
 from gazebo_msgs.msg import ModelStates
 from ros_sgp_ipp.srv import Waypoints
 from geometry_msgs.msg import Point
-from ros_sgp_ipp.msg import RSSI
+from ros_sgp_ipp.msg import RSSI, WaypointsList
 import message_filters
 import rospy
 
@@ -22,7 +22,7 @@ class OnlineIPP:
                  num_placements=20, 
                  num_param_inducing=40,
                  buffer_size=5000):
-        super().__init__('online_ipp')
+        super().__init__()
 
         self.num_placements = num_placements
 
@@ -109,17 +109,16 @@ class OnlineIPP:
         rospy.wait_for_service('waypoints')
         try:
             waypoint_service = rospy.ServiceProxy('waypoints', Waypoints)
-            waypoints = Waypoints()
+            waypoints = WaypointsList()
             for waypoint in self.waypoints:
                 waypoints.waypoints.append(Point(x=waypoint[0],
-                                                 y=waypoint[1],
-                                                 z=0))
+                                                 y=waypoint[1]))
             response = waypoint_service(waypoints)
             self.current_waypoint = response.current_waypoint
         except rospy.ServiceException as e:
             print(f'Service call failed: {e}')
 
-    def update_with_data(self):
+    def update_with_data(self, timer):
         # Update the parameters and waypoints if the buffer is full and 
         # empty the buffer after updating 
         if len(self.data_X) >= self.buffer_size:
@@ -162,8 +161,8 @@ def main(args=None):
     print('Starting online IPP mission')
 
     # Define the extent of the environment
-    xx = np.linspace(0, 10, 25)
-    yy = np.linspace(0, 10, 25)
+    xx = np.linspace(-5, 5, 25)
+    yy = np.linspace(-5, 5, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Start the online IPP mission

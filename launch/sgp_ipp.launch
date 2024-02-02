@@ -1,0 +1,13 @@
+<launch>
+  <!-- Load the turtlebot3_empty_world.launch file -->
+  <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_empty_world.launch" />
+
+  <!-- Load the rssi publisher node -->
+  <node pkg="ros_sgp_ipp" name="rssi_publisher" type="rssi_publisher.py" output="screen" />
+
+  <!-- Load the trajectory planner and online IPP nodes -->
+  <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+  <!-- Load the online IPP node -->
+  <node pkg="ros_sgp_ipp" name="onlineIPP" type="onlineIPP.py" output="screen" />
+</launch>

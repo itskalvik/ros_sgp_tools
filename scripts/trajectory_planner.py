@@ -41,16 +41,17 @@ class TrajectoryPlanner:
         self.waypoints = []
         self.current_waypoint = 0
         
+        self.rate = rospy.Rate(10)
         rospy.spin()
 
     def waypoint_service_callback(self, req):
-        waypoints = req.waypoints
+        waypoints = req.waypoints.waypoints
         self.waypoints = []
-        for waypoint in waypoints:
-            self.waypoints.append([waypoint.x, waypoint.y])
+        for i in range(len(waypoints)):
+            self.waypoints.append([waypoints[i].x, waypoints[i].y])
         return WaypointsResponse(self.current_waypoint)
 
-    def visit_waypoints(self):
+    def visit_waypoints(self, timer):
         for i in range(len(self.waypoints)):
             print(f'Visiting waypoint {i}')
             print(f'Current position: {self.position}')
