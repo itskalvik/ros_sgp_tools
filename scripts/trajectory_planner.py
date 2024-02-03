@@ -2,6 +2,7 @@
 
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
 from gazebo_msgs.msg import ModelStates
+from std_msgs.msg import Int32
 from geometry_msgs.msg import Twist
 from math import remainder
 import tf.transformations
@@ -38,6 +39,9 @@ class TrajectoryPlanner:
         rospy.init_node('trajectory_planner', anonymous=True)
         self.control_publisher = rospy.Publisher('/cmd_vel', Twist, 
                                                  queue_size=10)
+        self.current_waypoint_publisher = rospy.Publisher('/current_waypoint',
+                                                          Int32,
+                                                          queue_size=10)
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', 
                                                 ModelStates, 
                                                 self.position_callback)
@@ -49,17 +53,22 @@ class TrajectoryPlanner:
 
         # Setup the timer to update the parameters and waypoints
         self.timer = rospy.Timer(rospy.Duration(5), self.visit_waypoints)
+        self.current_waypoint_timer = rospy.Timer(rospy.Duration(1), 
+                                                  self.publish_current_waypoint)
 
         # Initialize the position and goal
         self.position = np.array([0, 0, 0])
         self.control_cmd = Twist()
         self.waypoints = []
-        self.current_waypoint = 0
+        self.current_waypoint = -1
         
         self.rate = rospy.Rate(10)
 
         rospy.loginfo('Trajectory planner initialized, waiting for waypoints')
         rospy.spin()
+
+    def publish_current_waypoint(self, timer):
+        self.current_waypoint_publisher.publish(self.current_waypoint)
 
     '''
     Service callback to receive the waypoints and return the current waypoint
@@ -75,7 +84,7 @@ class TrajectoryPlanner:
         for i in range(len(waypoints)):
             self.waypoints.append([waypoints[i].x, waypoints[i].y])
         rospy.loginfo('Waypoints received')
-        return WaypointsResponse(self.current_waypoint)
+        return WaypointsResponse(True)
 
     '''
     Visit the waypoints in the waypoints list and empty the list after visiting all of them 
@@ -87,12 +96,13 @@ class TrajectoryPlanner:
         
         rospy.loginfo('Visiting waypoints')
         for i in range(len(self.waypoints)):
-            self.current_waypoint = i
+            self.current_waypoint = i+1
             self.move2goal(self.waypoints[i])
             rospy.loginfo(f'Reached Waypoint {i+1}')
 
         # Empty the waypoints after visiting all of them
         self.waypoints = []
+        self.current_waypoint = -1
         rospy.loginfo('All waypoints visited, waiting for new waypoints')
 
     '''
@@ -105,7 +115,7 @@ class TrajectoryPlanner:
     def move2goal(self, goal):
         rotation_complete = False
         while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance:
-            # Rotate the robot to the goal first
+            # Rotate the robot towards the goal first
             if not rotation_complete:
                 # Calculate the angle to the goal
                 error_angle = np.arctan2(goal[1] - self.position[1], 
@@ -120,6 +130,7 @@ class TrajectoryPlanner:
                                                         self.position[2] + error_angle])
                 else:
                     rotation_complete = True
+                    continue
             # Move the robot to the goal
             else:      
                 control_cmd = self.get_control_cmd(self.position, goal)

@@ -11,22 +11,35 @@ from gazebo_msgs.msg import ModelStates
 from ros_sgp_ipp.srv import Waypoints
 from geometry_msgs.msg import Point
 from ros_sgp_ipp.msg import RSSI, WaypointsList
+from std_msgs.msg import Int32
 import message_filters
 import rospy
 
 
 class OnlineIPP:
-    """Class to create an online IPP mission."""
+    """
+    Class to create an online IPP mission.
 
+    Note: Make sure the number of waypoints is small enough so that 
+    the parameters update and waypoints updates are fast enough to 
+    reach the robot before it reaches the next waypoint.
+
+    Args:
+        X_train (np.ndarray): The training data for the IPP model, 
+                              used to approximate the bounds of the environment.
+        num_waypoints (int): The number of waypoints/inducing points for the IPP model.
+        num_param_inducing (int): The number of inducing points for the OSGPR model.
+        buffer_size (int): The size of the buffers to store the sensor data.
+    """
     def __init__(self, X_train, 
-                 num_placements=20, 
+                 num_waypoints=10, 
                  num_param_inducing=40,
-                 buffer_size=1000):
+                 buffer_size=100):
         super().__init__()
 
         rospy.loginfo('Initializing online IPP mission')
 
-        self.num_placements = num_placements
+        self.num_waypoints = num_waypoints
 
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
@@ -35,7 +48,7 @@ class OnlineIPP:
 
         # Get the initial IPP solution
         self.transformer = FixedInducingTransformer()
-        self.IPP_model, _ = get_aug_sgp_sol(num_placements, 
+        self.IPP_model, _ = get_aug_sgp_sol(num_waypoints, 
                                             X_train,
                                             likelihood_variance,
                                             kernel,
@@ -78,6 +91,8 @@ class OnlineIPP:
         self.data_y = []
         self.buffer_size = buffer_size
         self.current_waypoint = 0
+        self.mean = None
+        self.std = None
 
         # Setup the ROS node
         rospy.init_node('online_ipp', anonymous=True)                      
@@ -93,6 +108,8 @@ class OnlineIPP:
                                                                        allow_headerless=True)
         data_subscriber.registerCallback(self.data_callback)
 
+        rospy.Subscriber('/current_waypoint', Int32, self.current_waypoint_callback)
+
         # Setup the timer to update the parameters and waypoints
         self.timer = rospy.Timer(rospy.Duration(5), self.update_with_data)
 
@@ -101,6 +118,19 @@ class OnlineIPP:
         rospy.loginfo('Initial waypoints synced with the trajectory planner')
 
         rospy.spin()
+
+    '''
+    Callback to get the current waypoint. If the robot has reached a waypoint and 
+    is heading to the next waypoint, update the parameters and the future waypoints.  
+    '''
+    def current_waypoint_callback(self, msg):
+        if msg.data > self.current_waypoint:
+            if msg.data == len(self.waypoints):
+                rospy.signal_shutdown('Mission complete')
+                return
+            else:
+                self.update_with_data(force_update=True)
+        self.current_waypoint = msg.data
 
     def data_callback(self, pose_msg, rssi_msg):
         # Append the new data to the buffers
@@ -118,34 +148,34 @@ class OnlineIPP:
             for waypoint in self.waypoints:
                 waypoints.waypoints.append(Point(x=waypoint[0],
                                                  y=waypoint[1]))
-            response = waypoint_service(waypoints)
-            self.current_waypoint = response.current_waypoint
+            success = waypoint_service(waypoints)
         except rospy.ServiceException as e:
             print(f'Service call failed: {e}')
 
-    def update_with_data(self, timer, force_update=False):
+    def update_with_data(self, timer=None, force_update=False):
         # Update the parameters and waypoints if the buffer is full and 
         # empty the buffer after updating 
-        if len(self.data_X) >= self.buffer_size or force_update:
+        if len(self.data_X) > self.buffer_size or (force_update and \
+              len(self.data_X) > self.num_waypoints):
+            
             rospy.loginfo('Updating parameters and waypoints')
 
             # Make local copies of the data
-            data_X = np.array(self.data_X)
-            data_y = np.array(self.data_y)
+            data_X = np.array(self.data_X).reshape(-1, 2)
+            data_y = np.array(self.data_y).reshape(-1, 1)
 
             # Empty global data buffers
             self.data_X = []
             self.data_y = []
 
-            # Update the parameters and waypoints
+            # Update the parameters and the waypoints after 
+            # the current waypoint the robot is heading to
             self.update_param(data_X, data_y)
             self.update_waypoints(self.current_waypoint)
 
             # Sync the waypoints with the trajectory planner
             self.sync_waypoints()
             rospy.loginfo('Updated waypoints synced with the trajectory planner')
-        else:
-            rospy.loginfo(f'Current buffer size: {len(self.data_X)}')
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
@@ -168,8 +198,25 @@ class OnlineIPP:
         """Update the OSGPR parameters."""
 
         # Get the new inducing points for the path
+        y_new = self.preprocess_data(y_new)
         self.online_param.update((X_new, y_new))
         optimize_model(self.online_param, opt='scipy')
+
+    def preprocess_data(self, y, alpha=0.1):
+        """Normalize the data and return the normalized data."""
+        if self.mean is None:
+            self.mean = np.mean(y)
+            self.std = np.std(y)
+        else:
+            self.mean = (1 - alpha) * self.mean + alpha * np.mean(y)
+            self.std = (1 - alpha) * self.std + alpha * np.std(y)
+
+        try:
+            y = (y - self.mean) / self.std
+        except:
+            y = (y - self.mean) / (self.std + 1e-6)
+        
+        return y
 
 def main(args=None):
     print('Starting online IPP mission')
