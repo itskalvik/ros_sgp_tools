@@ -5,10 +5,12 @@ import rospy
 from ros_sgp_ipp.msg import RSSI
 
 
-def loop():
+def main():
     rospy.init_node('rssi_publisher', anonymous=True)
     publisher = rospy.Publisher('rssi', RSSI, queue_size=10)
     rate = rospy.Rate(10)
+    rospy.loginfo('RSSI publisher initialized, publishing RSSI')
+
     while not rospy.is_shutdown():
     
         myCmd = os.popen('nmcli dev wifi | grep "^*"').read()
@@ -27,6 +29,6 @@ def loop():
 
 if __name__ == '__main__':
     try:
-        loop()
+        main()
     except rospy.ROSInterruptException:
         pass

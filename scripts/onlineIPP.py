@@ -21,8 +21,10 @@ class OnlineIPP:
     def __init__(self, X_train, 
                  num_placements=20, 
                  num_param_inducing=40,
-                 buffer_size=5000):
+                 buffer_size=1000):
         super().__init__()
+
+        rospy.loginfo('Initializing online IPP mission')
 
         self.num_placements = num_placements
 
@@ -69,6 +71,8 @@ class OnlineIPP:
 
         del init_param
 
+        rospy.loginfo('Initial IPP solution found')
+
         # Setup the data buffers and the current waypoint
         self.data_X = []
         self.data_y = []
@@ -94,6 +98,7 @@ class OnlineIPP:
 
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
+        rospy.loginfo('Initial waypoints synced with the trajectory planner')
 
         rospy.spin()
 
@@ -118,20 +123,29 @@ class OnlineIPP:
         except rospy.ServiceException as e:
             print(f'Service call failed: {e}')
 
-    def update_with_data(self, timer):
+    def update_with_data(self, timer, force_update=False):
         # Update the parameters and waypoints if the buffer is full and 
         # empty the buffer after updating 
-        if len(self.data_X) >= self.buffer_size:
-            self.update_param(np.array(self.data_X),
-                              np.array(self.data_y))
-            self.update_waypoints(self.current_waypoint)
+        if len(self.data_X) >= self.buffer_size or force_update:
+            rospy.loginfo('Updating parameters and waypoints')
 
-            # Empty the data buffers
+            # Make local copies of the data
+            data_X = np.array(self.data_X)
+            data_y = np.array(self.data_y)
+
+            # Empty global data buffers
             self.data_X = []
             self.data_y = []
 
+            # Update the parameters and waypoints
+            self.update_param(data_X, data_y)
+            self.update_waypoints(self.current_waypoint)
+
             # Sync the waypoints with the trajectory planner
             self.sync_waypoints()
+            rospy.loginfo('Updated waypoints synced with the trajectory planner')
+        else:
+            rospy.loginfo(f'Current buffer size: {len(self.data_X)}')
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
