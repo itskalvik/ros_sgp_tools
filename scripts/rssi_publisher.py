@@ -1,34 +1,56 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import rospy
 from ros_sgp_ipp.msg import RSSI
 
 
-def main():
+def get_rssi():
+    cmd = os.popen('nmcli dev wifi | grep "^*"').read()
+    cmd = cmd.split()
+    if len(cmd) > 6:
+        dBm = float(cmd[7])/2-100
+    else:
+        rospy.logerr("Cannot get info from wireless!")
+    return dBm
+
+def get_pi_rssi():
+    cmd = os.popen('iwconfig wlan0 | grep Quality').read()
+    cmd = cmd.split()
+    if len(cmd) > 4:
+        dBm = float(cmd[3].split('=')[1])
+    else:
+        rospy.logerr("Cannot get info from wireless!")
+    return dBm
+
+def main(rssi_fun):
     rospy.init_node('rssi_publisher', anonymous=True)
     publisher = rospy.Publisher('rssi', RSSI, queue_size=10)
     rate = rospy.Rate(10)
     rospy.loginfo('RSSI publisher initialized, publishing RSSI')
 
     while not rospy.is_shutdown():
-    
-        myCmd = os.popen('nmcli dev wifi | grep "^*"').read()
-        cmdList = myCmd.split()
-        
-        if len(cmdList) > 6:
-            quality = float(cmdList[7])
-            dBm = quality/2-100
-            msg = RSSI()
-            msg.rssi = dBm
-            msg.header.stamp = rospy.Time.now()
-            publisher.publish(msg)
-        else:
-            rospy.logerr("Cannot get info from wireless!")
+        dBm = rssi_fun()
+        msg = RSSI()
+        msg.rssi = dBm
+        msg.header.stamp = rospy.Time.now()
+        publisher.publish(msg)
         rate.sleep()
 
+
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        PI = sys.argv[1]
+    else:
+        PI = True
+
+    if PI:
+        rssi_fun = get_pi_rssi
+    else:
+        rssi_fun = get_rssi
+
     try:
-        main()
+        main(rssi_fun)
     except rospy.ROSInterruptException:
         pass
