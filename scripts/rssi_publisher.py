@@ -43,7 +43,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         PI = sys.argv[1]
     else:
-        PI = True
+        PI = False
 
     if PI:
         rssi_fun = get_pi_rssi
