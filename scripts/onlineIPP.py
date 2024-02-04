@@ -211,15 +211,18 @@ class OnlineIPP:
             self.mean = (1 - alpha) * self.mean + alpha * np.mean(y)
             self.std = (1 - alpha) * self.std + alpha * np.std(y)
 
-        try:
-            y = (y - self.mean) / self.std
-        except:
-            y = (y - self.mean) / (self.std + 1e-6)
-        
+        # Sanity check to avoid spreading the data too much
+        if self.std < 1e-2:
+            std = 1
+        else:
+            std = self.std
+
+        y = (y - self.mean) / std
+
         return y
 
-def main(args=None):
-    print('Starting online IPP mission')
+
+def main():
 
     # Define the extent of the environment
     xx = np.linspace(-5, 5, 25)
@@ -227,7 +230,7 @@ def main(args=None):
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Start the online IPP mission
-    mission = OnlineIPP(X_train)
+    OnlineIPP(X_train)
 
 if __name__ == '__main__':
     try:
