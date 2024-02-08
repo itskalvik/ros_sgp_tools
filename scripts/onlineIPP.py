@@ -7,9 +7,8 @@ from sgp_ipp.utils.sensor_placement import *
 from sgp_ipp.models.osgpr import OSGPR_VFE
 from sgp_ipp.models.transformations import FixedInducingTransformer
 
-from gazebo_msgs.msg import ModelStates
 from ros_sgp_ipp.srv import Waypoints
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped
 from ros_sgp_ipp.msg import RSSI, WaypointsList
 from std_msgs.msg import Int32
 import message_filters
@@ -98,8 +97,8 @@ class OnlineIPP:
         rospy.init_node('online_ipp', anonymous=True)                      
         
         # Setup the subscribers
-        pose_subscriber = message_filters.Subscriber('/gazebo/model_states', 
-                                                     ModelStates)
+        pose_subscriber = message_filters.Subscriber('/vrpn_client_node/Robot1/pose', 
+                                                     PoseStamped)
         rssi_subscriber = message_filters.Subscriber('/rssi', 
                                                      RSSI)
         data_subscriber = message_filters.ApproximateTimeSynchronizer([pose_subscriber, 
@@ -134,8 +133,8 @@ class OnlineIPP:
 
     def data_callback(self, pose_msg, rssi_msg):
         # Append the new data to the buffers
-        self.data_X.append([pose_msg.pose[1].position.x, 
-                            pose_msg.pose[1].position.y])
+        self.data_X.append([pose_msg.pose.position.x, 
+                            pose_msg.pose.position.y])
         self.data_y.append(rssi_msg.rssi)
 
     def sync_waypoints(self):

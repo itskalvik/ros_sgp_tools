@@ -1,9 +1,8 @@
 #! /usr/bin/env python3
 
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
-from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Int32
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseStamped
 from math import remainder
 import tf.transformations
 import numpy as np
@@ -42,8 +41,8 @@ class TrajectoryPlanner:
         self.current_waypoint_publisher = rospy.Publisher('/current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', 
-                                                ModelStates, 
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/Robot1/pose', 
+                                                PoseStamped, 
                                                 self.position_callback)
         
         # Setup the service to send the waypoints
@@ -185,8 +184,8 @@ class TrajectoryPlanner:
              msg.pose[1].orientation.z,
              msg.pose[1].orientation.w]
         (roll,pitch,yaw) = tf.transformations.euler_from_quaternion(q)
-        self.position = np.array([msg.pose[1].position.x, 
-                                  msg.pose[1].position.y, 
+        self.position = np.array([msg.pose.position.x, 
+                                  msg.pose.position.y, 
                                   yaw])
 
 

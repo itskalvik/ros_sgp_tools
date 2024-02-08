@@ -3,7 +3,9 @@
   <include file="$(find turtlebot3_bringup)/launch/turtlebot3_robot.launch" />
 
   <!-- Load the Optitrack launch file -->
-  <include file="$(find vrpn_client_ros)/launch/sample.launch" />
+  <include file="$(find vrpn_client_ros)/launch/sample.launch">
+      <arg name="server" value="192.168.1.108" />
+  </include>  
 
   <!-- Load the rssi publisher node -->
   <node pkg="ros_sgp_ipp" name="rssi_publisher" type="rssi_publisher.py" output="screen" />
