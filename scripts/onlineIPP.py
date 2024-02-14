@@ -224,8 +224,8 @@ class OnlineIPP:
 def main():
 
     # Define the extent of the environment
-    xx = np.linspace(-5, 5, 25)
-    yy = np.linspace(-5, 5, 25)
+    xx = np.linspace(-2, 2, 25)
+    yy = np.linspace(-2, 2, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Start the online IPP mission

@@ -13,6 +13,7 @@ def get_rssi():
         dBm = float(cmd[7])/2-100
     else:
         rospy.logerr("Cannot get info from wireless!")
+        dBm = -1.
     return dBm
 
 def get_pi_rssi():
@@ -22,6 +23,7 @@ def get_pi_rssi():
         dBm = float(cmd[3].split('=')[1])
     else:
         rospy.logerr("Cannot get info from wireless!")
+        dBm = -1.
     return dBm
 
 def main(rssi_fun):

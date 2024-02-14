@@ -2,6 +2,9 @@
   <!-- Load the turtlebot3_empty_world.launch file -->
   <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_empty_world.launch" />
 
+  <!-- Map Gazebo's robot pose data to match Vicon's robot pose data format  -->
+  <node pkg="ros_sgp_ipp" name="gazebo_pose_publisher" type="gazebo_pose_publisher.py" output="screen" />
+
   <!-- Load the rssi publisher node -->
   <node pkg="ros_sgp_ipp" name="rssi_publisher" type="rssi_publisher.py" output="screen" />
 
