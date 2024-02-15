@@ -41,7 +41,7 @@ class TrajectoryPlanner:
         self.current_waypoint_publisher = rospy.Publisher('/current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/Robot1/pose', 
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/turtlebot1/pose', 
                                                 PoseStamped, 
                                                 self.position_callback)
         
@@ -113,7 +113,9 @@ class TrajectoryPlanner:
     '''
     def move2goal(self, goal):
         rotation_complete = False
-        while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance:
+        while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
+            and not rospy.is_shutdown():
+
             # Rotate the robot towards the goal first
             if not rotation_complete:
                 # Calculate the angle to the goal
@@ -179,10 +181,10 @@ class TrajectoryPlanner:
         return sol
 
     def position_callback(self, msg):
-        q = [msg.pose[1].orientation.x,
-             msg.pose[1].orientation.y,
-             msg.pose[1].orientation.z,
-             msg.pose[1].orientation.w]
+        q = [msg.pose.orientation.x,
+             msg.pose.orientation.y,
+             msg.pose.orientation.z,
+             msg.pose.orientation.w]
         (roll,pitch,yaw) = tf.transformations.euler_from_quaternion(q)
         self.position = np.array([msg.pose.position.x, 
                                   msg.pose.position.y, 
