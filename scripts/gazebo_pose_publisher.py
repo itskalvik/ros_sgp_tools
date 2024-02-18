@@ -16,23 +16,27 @@ class GazeboPosePublisher:
         rospy.init_node('gazebo_pose_publisher', anonymous=True)                      
         
         # Setup the subscriber
+        ns = rospy.get_namespace()
+        if len(ns) > 1:
+            self.robot_index = int(ns[:-1].split('_')[-1])+1
+        else:
+            self.robot_index = 1
+
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', 
                                                 ModelStates, 
                                                 self.position_callback)
 
         # Setup the publisher
-        self.pose_publisher = rospy.Publisher('/vrpn_client_node/turtlebot1/pose', 
+        self.pose_publisher = rospy.Publisher('/vrpn_client_node'+ns+'pose', 
                                               PoseStamped, 
                                               queue_size=10)
         
         self.current_pose = PoseStamped()
-        self.robot_index = 1
 
         rospy.loginfo('Gazebo Pose Publisher initialized')
         rospy.spin()
 
-
-    def position_callback(self, msg):
+    def position_callback(self, msg):       
         self.current_pose.header.stamp = rospy.Time.now()
         self.current_pose.pose.orientation.x = msg.pose[self.robot_index].orientation.x
         self.current_pose.pose.orientation.y = msg.pose[self.robot_index].orientation.y

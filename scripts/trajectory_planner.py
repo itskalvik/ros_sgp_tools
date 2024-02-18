@@ -36,12 +36,14 @@ class TrajectoryPlanner:
 
         # Initialize the node, publisher, and subscriber
         rospy.init_node('trajectory_planner', anonymous=True)
-        self.control_publisher = rospy.Publisher('/cmd_vel', Twist, 
+
+        ns = rospy.get_namespace()
+        self.control_publisher = rospy.Publisher('cmd_vel', Twist, 
                                                  queue_size=10)
-        self.current_waypoint_publisher = rospy.Publisher('/current_waypoint',
+        self.current_waypoint_publisher = rospy.Publisher('current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/turtlebot1/pose', 
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node'+ns+'pose',
                                                 PoseStamped, 
                                                 self.position_callback)
         
