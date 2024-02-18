@@ -28,7 +28,7 @@ class TrajectoryPlanner:
     '''
     def __init__(self, 
                  linear_velocity_gain=0.5,
-                 angular_velocity_gain=3.0,
+                 angular_velocity_gain=1.5,
                  distance_tolerance=0.05,
                  angle_tolerance=0.05):
         self.distance_tolerance = distance_tolerance

@@ -32,7 +32,7 @@ class offlineIPP:
     """
     def __init__(self, X_train, 
                  num_waypoints=10, 
-                 num_robots=2):
+                 num_robots=1):
         super().__init__()
 
         # Setup the ROS node
@@ -104,7 +104,7 @@ class offlineIPP:
             for waypoint in path:
                 self.publish_marker(waypoint, i)
         '''
-
+        
     def plot_paths(self, paths, candidates=None, title=None):
         plt.figure()
         for path in paths:
@@ -119,12 +119,13 @@ class offlineIPP:
 
     def publish_marker(self, position, color_idx=0):
         marker = Marker()
-        marker.header.frame_id = "/world"
+        marker.header.frame_id = "/base_footprint"
         marker.header.stamp = rospy.Time.now()
 
         # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
         marker.type = 2
         marker.id = 0
+        marker.action = 0
 
         # Set the scale of the marker
         marker.scale.x = 1.0
@@ -141,6 +142,12 @@ class offlineIPP:
         marker.pose.position.x = position[0]
         marker.pose.position.y = position[1]
         marker.pose.position.z = 0.0
+
+        marker.scale.x = 1
+        marker.scale.y = 1
+        marker.scale.z = 1
+
+        marker.lifetime = rospy.Duration(200)
 
         self.marker_pub.publish(marker)
 
