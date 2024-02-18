@@ -8,6 +8,8 @@ import tf.transformations
 import numpy as np
 import rospy
 
+from controllers import *
+
 
 '''
 Trajectory planner class to move a diff-drive/skid-drive robot to waypoints using the
@@ -25,14 +27,12 @@ class TrajectoryPlanner:
         angle_tolerance: Angle tolerance to the goal
     '''
     def __init__(self, 
-                 max_linear_velocity=0.6,
-                 max_angular_velocity=0.5,
+                 linear_velocity_gain=0.5,
+                 angular_velocity_gain=3.0,
                  distance_tolerance=0.05,
                  angle_tolerance=0.05):
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
-        self.max_linear_velocity = max_linear_velocity
-        self.max_angular_velocity = max_angular_velocity
 
         # Initialize the node, publisher, and subscriber
         rospy.init_node('trajectory_planner', anonymous=True)
@@ -63,6 +63,10 @@ class TrajectoryPlanner:
         self.waypoints = []
         self.current_waypoint = -1
         
+        # Create the trajectory controller
+        self.get_control_cmd = create_clf_unicycle_position_controller(linear_velocity_gain=linear_velocity_gain,
+                                                                       angular_velocity_gain=angular_velocity_gain)
+
         self.rate = rospy.Rate(10)
 
         rospy.loginfo('Trajectory planner initialized, waiting for waypoints')
@@ -114,29 +118,12 @@ class TrajectoryPlanner:
         goal: Goal position [x, y]      
     '''
     def move2goal(self, goal):
-        rotation_complete = False
         while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
             and not rospy.is_shutdown():
 
-            # Rotate the robot towards the goal first
-            if not rotation_complete:
-                # Calculate the angle to the goal
-                error_angle = np.arctan2(goal[1] - self.position[1], 
-                                         goal[0] - self.position[0])
-                error_angle -= self.position[2]
-                # Normalize the angle to [-π, π]
-                error_angle = remainder(error_angle, 2*np.pi)
-                if np.abs(error_angle) > self.angle_tolerance:
-                    control_cmd = self.get_control_cmd(self.position,
-                                                       [self.position[0], 
-                                                        self.position[1], 
-                                                        self.position[2] + error_angle])
-                else:
-                    rotation_complete = True
-                    continue
-            # Move the robot to the goal
-            else:      
-                control_cmd = self.get_control_cmd(self.position, goal)
+            # Compute the control command
+            control_cmd = self.get_control_cmd(np.array(self.position).reshape(3, 1),
+                                               np.array(goal).reshape(2, 1))
 
             # Publish the control command
             self.control_cmd.linear.x = control_cmd[0]
@@ -149,38 +136,6 @@ class TrajectoryPlanner:
         self.control_cmd.linear.x = 0
         self.control_cmd.angular.z = 0
         self.control_publisher.publish(self.control_cmd)
-
-    '''
-    Mapping Single-Integrator Dynamics to Unicycle Control Commands
-    https://liwanggt.github.io/files/Robotarium_CSM_Impact.pdf (Page 14)
-
-    Args:
-        state: [x, y, θ] Current state of the robot
-        goal: [x, y, θ] Goal position
-        l: Lookahead distance
-    Returns:
-        sol: [v, ω] Control commands [linear velocity, angular velocity]
-    '''
-    def get_control_cmd(self, state, goal, l=0.05):
-        if len(goal) == 2:
-            goal = np.array([goal[0], goal[1], state[2]])
-
-        x_diff = goal - state
-        s_diff = x_diff[0:2] + l * x_diff[2] * np.array([-np.sin(state[2]), 
-                                                          np.cos(state[2])])
-        R_inv = np.array([[       np.cos(state[2]),       np.sin(state[2])],
-                          [-(1/l)*np.sin(state[2]), (1/l)*np.cos(state[2])]])
-        sol = np.dot(R_inv, s_diff)
-
-        # Limiting the linear and angular velocity
-        sol[0] = np.clip(sol[0], 
-                         -self.max_linear_velocity, 
-                         self.max_linear_velocity)
-        sol[1] = np.clip(sol[1], 
-                         -self.max_angular_velocity, 
-                         self.max_angular_velocity)
-        
-        return sol
 
     def position_callback(self, msg):
         q = [msg.pose.orientation.x,
