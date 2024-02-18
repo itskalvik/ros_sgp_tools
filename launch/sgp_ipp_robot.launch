@@ -1,12 +1,15 @@
 <launch>
+  <!-- Load the Optitrack launch file -->
+  <include file="$(find vrpn_client_ros)/launch/sample.launch">
+      <arg name="server" value="192.168.1.181" />
+  </include>  
+
+  <!-- Load the offline IPP node -->
+  <node pkg="ros_sgp_ipp" name="offlineIPP" type="offlineIPP.py" output="screen" />
+  
   <group ns = "tb3_0">
     <!-- Load the turtlebot3_robot launch file -->
     <include file="$(find turtlebot3_bringup)/launch/turtlebot3_robot.launch" />
-
-    <!-- Load the Optitrack launch file -->
-    <include file="$(find vrpn_client_ros)/launch/sample.launch">
-        <arg name="server" value="192.168.1.181" />
-    </include>  
 
     <!-- Load the rssi publisher node -->
     <node pkg="ros_sgp_ipp" name="rssi_publisher" type="rssi_publisher.py" output="screen" />
