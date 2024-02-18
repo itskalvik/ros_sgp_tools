@@ -53,7 +53,7 @@ class offlineIPP:
 
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
-        rospy.loginfo('Initial waypoints synced with the trajectory planner')
+        rospy.loginfo('OfflineIPP: Initial waypoints synced with the trajectory planner')
 
         rospy.loginfo('Shutting down offline IPP node')
 
@@ -65,7 +65,7 @@ class offlineIPP:
 
         # Get the initial IPP solution
         transformer = IPPTransformer(n_dim=2, 
-                                          num_robots=self.num_robots)
+                                     num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(X_train, self.num_waypoints*self.num_robots)
         path_idx, _ = run_tsp(Xu_init, num_vehicles=self.num_robots)
@@ -86,7 +86,7 @@ class offlineIPP:
         self.waypoints =  [self.waypoints[path] for path in path_idx]
         self.waypoints = np.concatenate(self.waypoints, axis=0)
         
-        rospy.loginfo('Initial IPP solution found')
+        rospy.loginfo('OfflineIPP: Initial IPP solution found')
         path_lengths = transformer.distance(self.waypoints).numpy()
 
         msg = 'Initial path lengths: '
@@ -156,7 +156,7 @@ class offlineIPP:
         # update the current waypoint from the service
         sol_waypoints = self.waypoints.reshape(self.num_robots, -1, 2)
         for robot_idx in range(self.num_robots):
-            service = f'tb3_{robot_idx}/waypoints'
+            service = f'tb3_{robot_idx}/online_waypoints'
             rospy.wait_for_service(service)
             try:
                 waypoint_service = rospy.ServiceProxy(service, Waypoints)

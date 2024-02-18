@@ -1,9 +1,8 @@
 #! /usr/bin/env python3
 
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
-from std_msgs.msg import Int32
 from geometry_msgs.msg import Twist, PoseStamped
-from math import remainder
+from std_msgs.msg import Int32
 import tf.transformations
 import numpy as np
 import rospy
@@ -47,7 +46,7 @@ class TrajectoryPlanner:
                                                 PoseStamped, 
                                                 self.position_callback)
         
-        # Setup the service to send the waypoints
+        # Setup the service to receive the waypoints
         self.waypoint_service = rospy.Service('waypoints', 
                                               Waypoints, 
                                               self.waypoint_service_callback)
@@ -88,7 +87,7 @@ class TrajectoryPlanner:
         self.waypoints = []
         for i in range(len(waypoints)):
             self.waypoints.append([waypoints[i].x, waypoints[i].y])
-        rospy.loginfo('Waypoints received')
+        rospy.loginfo('Trajectory Planner: Waypoints received')
         return WaypointsResponse(True)
 
     '''
@@ -99,11 +98,11 @@ class TrajectoryPlanner:
         if len(self.waypoints) == 0:
             return
         
-        rospy.loginfo('Visiting waypoints')
+        rospy.loginfo('Trajectory Planner: Visiting waypoints')
         for i in range(len(self.waypoints)):
             self.current_waypoint = i+1
             self.move2goal(self.waypoints[i])
-            rospy.loginfo(f'Reached Waypoint {i+1}')
+            rospy.loginfo(f'Trajectory Planner: Reached Waypoint {i+1}')
 
         # Empty the waypoints after visiting all of them
         self.waypoints = []

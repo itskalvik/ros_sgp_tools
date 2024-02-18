@@ -31,6 +31,9 @@
     <!-- Map Gazebo's robot pose data to match Vicon's robot pose data format -->
     <node pkg="ros_sgp_ipp" name="gazebo_pose_publisher" type="gazebo_pose_publisher.py" output="screen" />
 
+    <!-- Start the Online Informative Path Planner -->
+    <node pkg="ros_sgp_ipp" name="onlineIPP" type="onlineIPP.py" output="screen" />
+
     <!-- Start the trajectory planner -->
     <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
   </group>
