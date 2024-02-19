@@ -22,6 +22,9 @@ class GazeboPosePublisher:
         else:
             self.robot_index = 1
 
+        # Wait for Gazebo to start
+        rospy.sleep(10)
+
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', 
                                                 ModelStates, 
                                                 self.position_callback)
@@ -33,7 +36,7 @@ class GazeboPosePublisher:
         
         self.current_pose = PoseStamped()
 
-        rospy.loginfo('Gazebo Pose Publisher initialized')
+        rospy.loginfo(ns+'Gazebo Pose Publisher initialized')
         rospy.spin()
 
     def position_callback(self, msg):       

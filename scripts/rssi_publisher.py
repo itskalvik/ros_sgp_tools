@@ -28,9 +28,11 @@ def get_pi_rssi():
 
 def main(rssi_fun):
     rospy.init_node('rssi_publisher', anonymous=True)
+    ns = rospy.get_namespace()
+
     publisher = rospy.Publisher('rssi', RSSI, queue_size=10)
     rate = rospy.Rate(10)
-    rospy.loginfo('RSSI publisher initialized, publishing RSSI')
+    rospy.loginfo(ns+'RSSI publisher initialized, publishing RSSI')
 
     while not rospy.is_shutdown():
         dBm = rssi_fun()

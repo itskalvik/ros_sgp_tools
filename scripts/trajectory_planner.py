@@ -3,6 +3,7 @@
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
 from geometry_msgs.msg import Twist, PoseStamped
 from std_msgs.msg import Int32
+from math import remainder
 import tf.transformations
 import numpy as np
 import rospy
@@ -27,7 +28,7 @@ class TrajectoryPlanner:
     '''
     def __init__(self, 
                  linear_velocity_gain=0.5,
-                 angular_velocity_gain=1.5,
+                 angular_velocity_gain=1.0,
                  distance_tolerance=0.05,
                  angle_tolerance=0.05):
         self.distance_tolerance = distance_tolerance
@@ -36,13 +37,13 @@ class TrajectoryPlanner:
         # Initialize the node, publisher, and subscriber
         rospy.init_node('trajectory_planner', anonymous=True)
 
-        ns = rospy.get_namespace()
+        self.ns = rospy.get_namespace()
         self.control_publisher = rospy.Publisher('cmd_vel', Twist, 
                                                  queue_size=10)
         self.current_waypoint_publisher = rospy.Publisher('current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node'+ns+'pose',
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node'+self.ns+'pose',
                                                 PoseStamped, 
                                                 self.position_callback)
         
@@ -63,12 +64,17 @@ class TrajectoryPlanner:
         self.current_waypoint = -1
         
         # Create the trajectory controller
+        '''
         self.get_control_cmd = create_clf_unicycle_position_controller(linear_velocity_gain=linear_velocity_gain,
                                                                        angular_velocity_gain=angular_velocity_gain)
+        '''
+
+        self.max_linear_velocity = 0.6
+        self.max_angular_velocity = 0.5
 
         self.rate = rospy.Rate(10)
 
-        rospy.loginfo('Trajectory planner initialized, waiting for waypoints')
+        rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
         rospy.spin()
 
     def publish_current_waypoint(self, timer):
@@ -87,7 +93,7 @@ class TrajectoryPlanner:
         self.waypoints = []
         for i in range(len(waypoints)):
             self.waypoints.append([waypoints[i].x, waypoints[i].y])
-        rospy.loginfo('Trajectory Planner: Waypoints received')
+        rospy.loginfo(self.ns+'Trajectory Planner: Waypoints received')
         return WaypointsResponse(True)
 
     '''
@@ -98,16 +104,16 @@ class TrajectoryPlanner:
         if len(self.waypoints) == 0:
             return
         
-        rospy.loginfo('Trajectory Planner: Visiting waypoints')
+        rospy.loginfo(self.ns+'Trajectory Planner: Visiting waypoints')
         for i in range(len(self.waypoints)):
             self.current_waypoint = i+1
             self.move2goal(self.waypoints[i])
-            rospy.loginfo(f'Trajectory Planner: Reached Waypoint {i+1}')
+            rospy.loginfo(self.ns+f'Trajectory Planner: Reached Waypoint {i+1}')
 
-        # Empty the waypoints after visiting all of them
-        self.waypoints = []
-        self.current_waypoint = -1
-        rospy.loginfo('All waypoints visited, waiting for new waypoints')
+        # Shutdown after visiting the waypoints 
+        rospy.sleep(2)
+        rospy.loginfo(self.ns+'Trajectory Planner: All waypoints visited')
+        rospy.signal_shutdown(self.ns+'Trajectory Planner: Received shutdown signal')
 
     '''
     Move the robot to a goal position using the Single-Integrator Dynamics 
@@ -117,12 +123,29 @@ class TrajectoryPlanner:
         goal: Goal position [x, y]      
     '''
     def move2goal(self, goal):
+        rotation_complete = False
         while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
             and not rospy.is_shutdown():
 
-            # Compute the control command
-            control_cmd = self.get_control_cmd(np.array(self.position).reshape(3, 1),
-                                               np.array(goal).reshape(2, 1))
+            # Rotate the robot towards the goal first
+            if not rotation_complete:
+                # Calculate the angle to the goal
+                error_angle = np.arctan2(goal[1] - self.position[1], 
+                                         goal[0] - self.position[0])
+                error_angle -= self.position[2]
+                # Normalize the angle to [-π, π]
+                error_angle = remainder(error_angle, 2*np.pi)
+                if np.abs(error_angle) > self.angle_tolerance:
+                    control_cmd = self.get_control_cmd(self.position,
+                                                       [self.position[0], 
+                                                        self.position[1], 
+                                                        self.position[2] + error_angle])
+                else:
+                    rotation_complete = True
+                    continue
+            # Move the robot to the goal
+            else:      
+                control_cmd = self.get_control_cmd(self.position, goal)
 
             # Publish the control command
             self.control_cmd.linear.x = control_cmd[0]
@@ -135,6 +158,38 @@ class TrajectoryPlanner:
         self.control_cmd.linear.x = 0
         self.control_cmd.angular.z = 0
         self.control_publisher.publish(self.control_cmd)
+
+    '''
+    Mapping Single-Integrator Dynamics to Unicycle Control Commands
+    https://liwanggt.github.io/files/Robotarium_CSM_Impact.pdf (Page 14)
+
+    Args:
+        state: [x, y, θ] Current state of the robot
+        goal: [x, y, θ] Goal position
+        l: Lookahead distance
+    Returns:
+        sol: [v, ω] Control commands [linear velocity, angular velocity]
+    '''
+    def get_control_cmd(self, state, goal, l=0.05):
+        if len(goal) == 2:
+            goal = np.array([goal[0], goal[1], state[2]])
+
+        x_diff = goal - state
+        s_diff = x_diff[0:2] + l * x_diff[2] * np.array([-np.sin(state[2]), 
+                                                          np.cos(state[2])])
+        R_inv = np.array([[       np.cos(state[2]),       np.sin(state[2])],
+                          [-(1/l)*np.sin(state[2]), (1/l)*np.cos(state[2])]])
+        sol = np.dot(R_inv, s_diff)
+
+        # Limiting the linear and angular velocity
+        sol[0] = np.clip(sol[0], 
+                         -self.max_linear_velocity, 
+                         self.max_linear_velocity)
+        sol[1] = np.clip(sol[1], 
+                         -self.max_angular_velocity, 
+                         self.max_angular_velocity)
+        
+        return sol
 
     def position_callback(self, msg):
         q = [msg.pose.orientation.x,

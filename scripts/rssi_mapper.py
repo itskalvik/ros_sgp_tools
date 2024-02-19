@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from gazebo_msgs.msg import ModelStates
+from geometry_msgs.msg import PoseStamped
 from ros_sgp_ipp.msg import RSSI
 from std_srvs.srv import SetBool
 import message_filters
@@ -25,18 +25,18 @@ class RSSIMapper:
 
         # Setup the ROS node
         rospy.init_node('rssi_mapper', anonymous=True)                      
-        
+        self.ns = rospy.get_namespace()
+
         # Setup the subscribers
-        pose_subscriber = message_filters.Subscriber('/gazebo/model_states', 
-                                                     ModelStates)
-        rssi_subscriber = message_filters.Subscriber('/rssi', 
+        pose_subscriber = message_filters.Subscriber('/vrpn_client_node'+self.ns+'pose', 
+                                                     PoseStamped)
+        rssi_subscriber = message_filters.Subscriber(self.ns+'rssi', 
                                                      RSSI)
         data_subscriber = message_filters.ApproximateTimeSynchronizer([pose_subscriber, 
                                                                        rssi_subscriber], 
                                                                        10, 0.1, 
                                                                        allow_headerless=True)
         data_subscriber.registerCallback(self.data_callback)
-
 
         # Setup the timer to update the parameters and waypoints
         self.timer = rospy.Timer(rospy.Duration(5), self.flush_data)
@@ -46,7 +46,7 @@ class RSSIMapper:
                                           SetBool,
                                           self.stop_rssi_mapper)
         
-        rospy.loginfo('RSSI mapper initialized')
+        rospy.loginfo(self.ns+'RSSI mapper initialized')
 
         # Flush data to disk before shutdown
         rospy.on_shutdown(self.stop_rssi_mapper)

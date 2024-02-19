@@ -16,9 +16,11 @@
   </include>  
 
   <!-- Start the Offline Informative Path Planner -->
+  <param name="num_robots" value="1" />
   <node pkg="ros_sgp_ipp" name="offlineIPP" type="offlineIPP.py" output="screen" />
 
   <group ns = "$(arg first_tb3)">
+    <!-- Spawn Gazebo model -->
     <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
 
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" output="screen">
