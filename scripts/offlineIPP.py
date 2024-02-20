@@ -13,7 +13,7 @@ from geometry_msgs.msg import Point
 import rospy
 
 import matplotlib.pyplot as plt
-
+np.random.seed(2021)
 
 class offlineIPP:
     """
