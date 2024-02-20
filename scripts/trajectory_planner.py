@@ -3,6 +3,7 @@
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
 from geometry_msgs.msg import Twist, PoseStamped
 from std_msgs.msg import Int32
+from math import remainder
 import tf.transformations
 import numpy as np
 import rospy
@@ -20,14 +21,14 @@ class TrajectoryPlanner:
     distance and angle tolerance to the goal.
 
     Args:
-        max_linear_velocity: Maximum linear velocity of the robot
-        max_angular_velocity: Maximum angular velocity of the robot
         distance_tolerance: Distance tolerance to the goal
         angle_tolerance: Angle tolerance to the goal
+        update_rate: Frequency of trajectory commands
     '''
     def __init__(self, 
-                 distance_tolerance=0.05,
-                 angle_tolerance=0.05):
+                 distance_tolerance=0.1,
+                 angle_tolerance=0.1,
+                 update_rate=2):
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
 
@@ -50,8 +51,8 @@ class TrajectoryPlanner:
                                               self.waypoint_service_callback)
 
         # Setup the timer to update the parameters and waypoints
-        self.timer = rospy.Timer(rospy.Duration(5), self.visit_waypoints)
-        self.current_waypoint_timer = rospy.Timer(rospy.Duration(1), 
+        self.timer = rospy.Timer(rospy.Duration(update_rate), self.visit_waypoints)
+        self.current_waypoint_timer = rospy.Timer(rospy.Duration(update_rate), 
                                                   self.publish_current_waypoint)
 
         # Initialize the position and goal
@@ -61,9 +62,10 @@ class TrajectoryPlanner:
         self.current_waypoint = -1
         
         # Create the trajectory controller
-        self.get_control_cmd = create_hybrid_unicycle_pose_controller()
+        self.get_control_cmd = create_hybrid_unicycle_pose_controller(angular_velocity_gain=0.2,
+                                                                      angular_velocity_limit=0.2)
 
-        self.rate = rospy.Rate(10)
+        self.rate = rospy.Rate(update_rate)
 
         rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
         rospy.spin()
@@ -115,13 +117,32 @@ class TrajectoryPlanner:
     def move2goal(self, goal):
         angle = np.arctan2(goal[1] - self.position[1], goal[0] - self.position[0])
         goal.append(angle)
-
+        rotation_complete = False
         while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
             and not rospy.is_shutdown():
 
+            # Rotate the robot towards the goal first
+            if not rotation_complete:
+                # Calculate the angle to the goal
+                error_angle = np.arctan2(goal[1] - self.position[1], 
+                                         goal[0] - self.position[0])
+                error_angle -= self.position[2]
+                # Normalize the angle to [-π, π]
+                error_angle = remainder(error_angle, 2*np.pi)
+                if np.abs(error_angle) > self.angle_tolerance:
+                    control_cmd = self.get_control_cmd(np.array(self.position).reshape(-1, 1),
+                                                       np.array([self.position[0], 
+                                                                self.position[1], 
+                                                                self.position[2] + error_angle]).reshape(-1, 1))
+                else:
+                    rotation_complete = True
+                    continue
+            # Move the robot to the goal
+            else:      
+                control_cmd = self.get_control_cmd(np.array(self.position).reshape(-1, 1), 
+                                                   np.array(goal).reshape(-1, 1))
+
             # Publish the control command
-            control_cmd = self.get_control_cmd(np.array(self.position).reshape(3, 1),
-                                               np.array(goal).reshape(3, 1))
             self.control_cmd.linear.x = control_cmd[0][0]
             self.control_cmd.angular.z = control_cmd[1][0]
             self.control_publisher.publish(self.control_cmd)
