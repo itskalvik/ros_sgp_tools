@@ -28,7 +28,7 @@ class TrajectoryPlanner:
     def __init__(self, 
                  distance_tolerance=0.1,
                  angle_tolerance=0.1,
-                 update_rate=2):
+                 update_rate=30):
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
 
@@ -62,8 +62,7 @@ class TrajectoryPlanner:
         self.current_waypoint = -1
         
         # Create the trajectory controller
-        self.get_control_cmd = create_hybrid_unicycle_pose_controller(angular_velocity_gain=0.2,
-                                                                      angular_velocity_limit=0.2)
+        self.get_control_cmd = create_hybrid_unicycle_pose_controller()
 
         self.rate = rospy.Rate(update_rate)
 
