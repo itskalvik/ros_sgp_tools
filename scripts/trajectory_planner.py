@@ -28,7 +28,7 @@ class TrajectoryPlanner:
     def __init__(self, 
                  distance_tolerance=0.1,
                  angle_tolerance=0.1,
-                 update_rate=30):
+                 update_rate=60):
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
 
@@ -64,9 +64,10 @@ class TrajectoryPlanner:
         # Create the trajectory controller
         self.get_control_cmd = create_hybrid_unicycle_pose_controller()
 
-        self.rate = rospy.Rate(update_rate)
-
         rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
+
+        # Keep alive until waypoints are received and then send vel commands at update rate
+        self.rate = rospy.Rate(update_rate)
         rospy.spin()
 
     def publish_current_waypoint(self, timer):

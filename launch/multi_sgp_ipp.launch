@@ -22,7 +22,7 @@
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
-    <arg name="gui" value="true"/>
+    <arg name="gui" value="false"/>
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
   </include>  
@@ -50,6 +50,9 @@
 
     <!-- Start the trajectory planner -->
     <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+    <!-- Load the data publisher node -->
+    <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
   </group>
 
   <group ns = "$(arg second_tb3)">
@@ -71,6 +74,9 @@
 
     <!-- Start the trajectory planner -->
     <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+    <!-- Load the data publisher node -->
+    <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
   </group>
 
   <group ns = "$(arg third_tb3)">
@@ -92,6 +98,9 @@
 
     <!-- Start the trajectory planner -->
     <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+    <!-- Load the data publisher node -->
+    <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
   </group>
 
 </launch>

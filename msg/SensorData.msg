@@ -1,2 +1,3 @@
 std_msgs/Header header
-float64 rssi
+float64[] x
+float64 y

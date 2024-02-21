@@ -52,7 +52,7 @@ add_message_files(
    FILES
    OfflineIPPData.msg
    WaypointsList.msg
-   RSSI.msg
+   SensorData.msg
 )
 
 ## Generate services in the 'srv' folder

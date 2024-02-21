@@ -7,10 +7,9 @@ from sgp_ipp.models.osgpr import OSGPR_VFE
 from sgp_ipp.models.transformations import IPPTransformer
 
 from ros_sgp_ipp.srv import Waypoints, OfflineIPP, OfflineIPPResponse
-from geometry_msgs.msg import Point, PoseStamped
-from ros_sgp_ipp.msg import RSSI, WaypointsList
+from ros_sgp_ipp.msg import SensorData, WaypointsList
+from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
-import message_filters
 import rospy
 
 
@@ -40,14 +39,13 @@ class OnlineIPP:
         # setup variables
         self.waypoints = None
         self.num_param_inducing = num_param_inducing
+        print(self.num_param_inducing)
 
         # Setup the data buffers and the current waypoint
         self.data_X = []
         self.data_y = []
         self.buffer_size = buffer_size
         self.current_waypoint = 0
-        self.mean = 1.0
-        self.std = 1.0
 
         # Setup the service to receive the waypoints and X_train data
         self.offlineIPP_service = rospy.Service('offlineIPP', 
@@ -68,17 +66,13 @@ class OnlineIPP:
         rospy.loginfo(self.ns+'OnlineIPP: Initial waypoints synced with the trajectory planner')
 
         # Setup the subscribers
-        pose_subscriber = message_filters.Subscriber('/vrpn_client_node'+self.ns+'pose', 
-                                                     PoseStamped)
-        rssi_subscriber = message_filters.Subscriber(self.ns+'rssi', 
-                                                     RSSI)
-        data_subscriber = message_filters.ApproximateTimeSynchronizer([pose_subscriber, 
-                                                                       rssi_subscriber], 
-                                                                       10, 0.1, 
-                                                                       allow_headerless=True)
-        data_subscriber.registerCallback(self.data_callback)
-
-        rospy.Subscriber(self.ns+'current_waypoint', Int32, self.current_waypoint_callback)
+        rospy.Subscriber(self.ns+'sensor_data',
+                         SensorData,
+                         self.data_callback)
+                                                                   
+        rospy.Subscriber(self.ns+'current_waypoint', 
+                         Int32, 
+                         self.current_waypoint_callback)
 
         # Setup the timer to update the parameters and waypoints
         self.timer = rospy.Timer(rospy.Duration(5), self.update_with_data)
@@ -155,17 +149,18 @@ class OnlineIPP:
     is heading to the next waypoint, update the parameters and the future waypoints.  
     '''
     def current_waypoint_callback(self, msg):
-        if msg.data == len(self.waypoints):
+        if msg.data == self.num_waypoints:
             rospy.signal_shutdown(self.ns+'OnlineIPP: Mission complete')
         elif msg.data > self.current_waypoint:
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
 
-    def data_callback(self, pose_msg, rssi_msg):
-        # Append the new data to the buffers
-        self.data_X.append([pose_msg.pose.position.x, 
-                            pose_msg.pose.position.y])
-        self.data_y.append(rssi_msg.rssi)
+    def data_callback(self, msg):
+        # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
+        if self.current_waypoint > 0 and self.current_waypoint != self.num_waypoints:
+            # Append the new data to the buffers
+            self.data_X.append(msg.x)
+            self.data_y.append(msg.y)
 
     def sync_waypoints(self):
         # Send the new waypoints to the trajectory planner and 
@@ -185,7 +180,7 @@ class OnlineIPP:
         # Update the parameters and waypoints if the buffer is full and 
         # empty the buffer after updating 
         if len(self.data_X) > self.buffer_size or (force_update and \
-              len(self.data_X) > self.num_waypoints):
+              len(self.data_X) > self.num_param_inducing):
             
             rospy.loginfo(self.ns+'OnlineIPP: Updating parameters and waypoints')
 
@@ -211,7 +206,8 @@ class OnlineIPP:
 
         # Freeze the visited inducing points
         Xu_visited = self.waypoints.copy()[:current_waypoint]
-        self.transformer.update(Xu_visited)
+        Xu_visited = np.array(Xu_visited).reshape(1, -1, 2)
+        self.transformer.update_Xu_fixed(Xu_visited)
 
         # Get the new inducing points for the path
         self.IPP_model.update(self.param_model.likelihood.variance,
@@ -225,22 +221,14 @@ class OnlineIPP:
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
-
         # Get the new inducing points for the path
-        y_new = (y_new - self.mean) / self.std
         self.param_model.update((X_new, y_new))
         optimize_model(self.param_model, opt='scipy')
 
 
 def main():
-
-    # Define the extent of the environment
-    xx = np.linspace(-2, 2, 25)
-    yy = np.linspace(-2, 2, 25)
-    X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
-
     # Start the online IPP mission
-    OnlineIPP(X_train)
+    OnlineIPP()
 
 if __name__ == '__main__':
     try:
