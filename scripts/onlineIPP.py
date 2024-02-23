@@ -2,9 +2,9 @@
 
 import gpflow
 import numpy as np
-from sgp_ipp.utils.sensor_placement import *
-from sgp_ipp.models.osgpr import OSGPR_VFE
-from sgp_ipp.models.transformations import IPPTransformer
+from sgptools.utils.sensor_placement import *
+from sgptools.models.osgpr import OSGPR_VFE
+from sgptools.models.transformations import IPPTransformer
 
 from ros_sgp_ipp.srv import Waypoints, OfflineIPP, OfflineIPPResponse
 from ros_sgp_ipp.msg import SensorData, WaypointsList

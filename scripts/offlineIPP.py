@@ -2,9 +2,9 @@
 
 import gpflow
 import numpy as np
-from sgp_ipp.utils.tsp import run_tsp
-from sgp_ipp.utils.sensor_placement import *
-from sgp_ipp.models.transformations import IPPTransformer
+from sgptools.utils.tsp import run_tsp
+from sgptools.utils.sensor_placement import *
+from sgptools.models.transformations import IPPTransformer
 from sklearn.neighbors import KNeighborsClassifier
 
 from ros_sgp_ipp.msg import OfflineIPPData
