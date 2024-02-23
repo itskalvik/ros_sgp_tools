@@ -3,7 +3,6 @@
 from ros_sgp_ipp.srv import Waypoints, WaypointsResponse
 from geometry_msgs.msg import Twist, PoseStamped
 from std_msgs.msg import Int32
-from math import remainder
 import tf.transformations
 import numpy as np
 import rospy
@@ -28,7 +27,7 @@ class TrajectoryPlanner:
     def __init__(self, 
                  distance_tolerance=0.1,
                  angle_tolerance=0.1,
-                 update_rate=60):
+                 update_rate=30):
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
 
@@ -63,7 +62,7 @@ class TrajectoryPlanner:
         
         # Create the trajectory controller
         self.get_control_cmd = create_hybrid_unicycle_pose_controller()
-
+        
         rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
 
         # Keep alive until waypoints are received and then send vel commands at update rate
@@ -115,27 +114,24 @@ class TrajectoryPlanner:
         goal: Goal position [x, y]      
     '''
     def move2goal(self, goal):
-        angle = np.arctan2(goal[1] - self.position[1], goal[0] - self.position[0])
-        goal.append(angle)
+        goal.append(0.0)
         rotation_complete = False
         while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
             and not rospy.is_shutdown():
+            # Compute best approach angle to goal
+            goal[2] = np.arctan2(goal[1] - self.position[1], goal[0] - self.position[0])
 
             # Rotate the robot towards the goal first
             if not rotation_complete:
-                # Calculate the angle to the goal
-                error_angle = np.arctan2(goal[1] - self.position[1], 
-                                         goal[0] - self.position[0])
-                error_angle -= self.position[2]
-                # Normalize the angle to [-π, π]
-                error_angle = remainder(error_angle, 2*np.pi)
+                error_angle = goal[2] - self.position[2]
+                # Wrap the angle to [-π, π]
+                error_angle = np.arctan2(np.sin(error_angle),np.cos(error_angle))
+
                 if np.abs(error_angle) > self.angle_tolerance:
-                    control_cmd = self.get_control_cmd(np.array(self.position).reshape(-1, 1),
-                                                       np.array([self.position[0], 
-                                                                self.position[1], 
-                                                                self.position[2] + error_angle]).reshape(-1, 1))
+                    control_cmd = [[0.], [error_angle*0.5]]
                 else:
                     rotation_complete = True
+                    rospy.loginfo(self.ns+'Rotation complete')
                     continue
             # Move the robot to the goal
             else:      

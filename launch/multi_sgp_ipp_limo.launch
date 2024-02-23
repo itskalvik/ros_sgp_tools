@@ -68,6 +68,9 @@
 
         <!-- Start the trajectory planner -->
         <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+        <!-- Load the data publisher node -->
+        <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
     </group>
 
     <group ns = "$(arg robot_1)">
@@ -106,6 +109,9 @@
 
         <!-- Start the trajectory planner -->
         <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+        <!-- Load the data publisher node -->
+        <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
     </group>
 
     <group ns = "$(arg robot_2)">
@@ -144,6 +150,9 @@
 
         <!-- Start the trajectory planner -->
         <node pkg="ros_sgp_ipp" name="trajectory_planner" type="trajectory_planner.py" output="screen" />
+
+        <!-- Load the data publisher node -->
+        <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
     </group>
 
 </launch>
