@@ -61,7 +61,10 @@ class TrajectoryPlanner:
         self.current_waypoint = -1
         
         # Create the trajectory controller
-        self.get_control_cmd = create_hybrid_unicycle_pose_controller()
+        self.get_control_cmd = create_hybrid_unicycle_pose_controller(angular_velocity_gain=0.6,
+                                                                      position_error=0.1, 
+                                                                      position_epsilon=0.3, 
+                                                                      rotation_error=0.1)                                                                      
         
         rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
 
@@ -128,7 +131,7 @@ class TrajectoryPlanner:
                 error_angle = np.arctan2(np.sin(error_angle),np.cos(error_angle))
 
                 if np.abs(error_angle) > self.angle_tolerance:
-                    control_cmd = [[0.], [error_angle*0.5]]
+                    control_cmd = [[0.], [error_angle*0.6]]
                 else:
                     rotation_complete = True
                     rospy.loginfo(self.ns+'Rotation complete')

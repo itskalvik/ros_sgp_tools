@@ -17,7 +17,7 @@ class DataPublisher:
 
         # Setup data
         home = str(Path.home())
-        filepath = os.path.join(home, 'sgp-ipp/datasets/ROMS.nc')
+        filepath = os.path.join(home, 'sgp-tools/datasets/ROMS.nc')
         self.dataset_X, self.dataset_y = self.prep_salinity_data(filepath)
         self.tree = cKDTree(self.dataset_X)
 
