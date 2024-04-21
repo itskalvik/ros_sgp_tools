@@ -23,10 +23,11 @@
   <param name="robot_description" command="$(find xacro)/xacro --inorder $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro" />
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg first_tb3) -x $(arg first_tb3_x_pos) -y $(arg first_tb3_y_pos) -z $(arg first_tb3_z_pos) -Y $(arg first_tb3_yaw) -param robot_description" />
   
-  <!-- Map Gazebo's robot pose data to match Vicon's robot pose data format -->
+  <!-- Map Gazebo's robot pose data to match optitrack robot pose data format -->
   <node pkg="ros_sgp_ipp" name="gazebo_pose_publisher" type="gazebo_pose_publisher.py" output="screen" />
-  <node pkg="ros_sgp_ipp" name="optitrack2odom" type="optitrack2odom.py" output="screen" />
+
+  <!-- Map optitrack robot pose data to tf frame -->
+  <node pkg="ros_sgp_ipp" name="optitrack_frame" type="optitrack_frame.py" output="screen" />
 
   <include file="$(find ros_sgp_ipp)/launch/move_base_mapless.launch" />
-
 </launch>

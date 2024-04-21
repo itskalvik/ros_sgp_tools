@@ -1,0 +1,17 @@
+<launch>
+  <!-- Load the Optitrack launch file -->
+  <include file="$(find vrpn_client_ros)/launch/sample.launch">
+      <arg name="server" value="192.168.1.181" />
+  </include>  
+
+  <group ns = "tb3_0">
+    <!-- Load the turtlebot3_robot launch file -->
+    <include file="$(find turtlebot3_bringup)/launch/turtlebot3_robot.launch" />
+
+    <!-- Map optitrack robot pose data to tf frame -->
+    <node pkg="ros_sgp_ipp" name="optitrack_frame" type="optitrack_frame.py" output="screen" />
+
+    <!-- Load move_base in mapless mode with optitrack -->
+    <include file="$(find ros_sgp_ipp)/launch/move_base_mapless.launch" />
+  </group>
+</launch>
