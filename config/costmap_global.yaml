@@ -1,6 +1,3 @@
 global_frame: optitrack
 rolling_window: true
 track_unknown_space: true
-
-plugins:
-   - {name: inflation,                 type: "costmap_2d::InflationLayer"}
