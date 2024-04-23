@@ -25,12 +25,10 @@ class OptiTrackFrame:
         else:
             self.robot_index = 1
 
-        vrpn_sub = message_filters.Subscriber('/vrpn_client_node/pose', 
-                                               PoseStamped)
-        odom_sub = message_filters.Subscriber('/odom', Odometry)
-        ts = message_filters.ApproximateTimeSynchronizer([vrpn_sub, odom_sub], 
-                                                         10, 0.1, allow_headerless=True)
-        ts.registerCallback(self.callback)
+        rospy.Subscriber('/vrpn_client_node/tb3/pose', 
+                         PoseStamped,
+                         self.callback)
+        self.listener = tf.TransformListener()
 
         # Setup the frame broadcaster
         self.br = tf.TransformBroadcaster()
@@ -44,21 +42,33 @@ class OptiTrackFrame:
             self.publish_frame()
             rate.sleep()
 
-    def callback(self, vrpn_msg, odom_msg):
-        Twv = PoseStamped_2_mat(vrpn_msg)
-        Two = PoseStamped_2_mat(odom_msg.pose)
+    def callback(self, msg):
+        try:
+            (trans,rot) = self.listener.lookupTransform('/odom', '/base_footprint', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            return
 
-        Tvw = T_inv(Twv)
-        Tvo = np.matmul(Tvw, Two)
-        q = quaternion_from_matrix(Tvo) 
+        # Odom to Base
+        Tob = quaternion_matrix(rot)
+        Tob[:3,3] = trans
 
-        self.pos = (Tvo[0,3], Tvo[1,3], Tvo[2,3])
+        # World to Base
+        Twb = PoseStamped_2_mat(msg)
+        # Base to World
+        Tbw = T_inv(Twb)
+
+        # Odom to World
+        Tow = np.matmul(Tob, Tbw)
+        Two = T_inv(Tow)
+
+        q = quaternion_from_matrix(Two) 
+        self.pos = (Two[0,3], Two[1,3], Two[2,3])
         self.rot = (q[0], q[1], q[2], q[3])
 
     def publish_frame(self):
         self.br.sendTransform(self.pos, self.rot,
                               rospy.Time.now(),
-                              "odom", "optitrack")
+                              "odom", "world")
         # transform from frame "optitrack" to frame "base_footprint"
 
 def PoseStamped_2_mat(p):

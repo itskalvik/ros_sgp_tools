@@ -1,2 +1,2 @@
-global_frame: optitrack
+global_frame: world
 rolling_window: true
