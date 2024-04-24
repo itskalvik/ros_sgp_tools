@@ -30,7 +30,7 @@ class OptiTrackFrame:
 
     def callback(self, msg):
         try:
-            (trans,rot) = self.listener.lookupTransform('/odom', '/base_footprint', rospy.Time(0))
+            (trans,rot) = self.listener.lookupTransform('/odom', '/base_link', rospy.Time(0))
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             return
 
@@ -47,13 +47,16 @@ class OptiTrackFrame:
         Tow = np.matmul(Tob, Tbw)
         Two = T_inv(Tow)
 
-        q = quaternion_from_matrix(Two) 
-        self.pos = (Two[0,3], Two[1,3], Two[2,3])
-        self.rot = (q[0], q[1], q[2], q[3])
-        self.br.sendTransform(self.pos, self.rot,
+        # TB3 to odom
+        Tsol = np.matmul(Tbw, Two)
+
+        q = quaternion_from_matrix(Tsol) 
+        pos = (Tsol[0,3], Tsol[1,3], Tsol[2,3])
+        rot = (q[0], q[1], q[2], q[3])
+        self.br.sendTransform(pos, rot,
                               rospy.Time.now(),
-                              "odom", "world")
-        # transform from frame "world" to frame "odom"
+                              "odom", "tb3")
+        # transform from frame "tb3" to frame "odom"
 
 def PoseStamped_2_mat(p):
     q = p.pose.orientation

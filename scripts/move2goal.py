@@ -10,10 +10,10 @@ def movebase_client():
     client.wait_for_server()
 
     goal = MoveBaseGoal()
-    goal.target_pose.header.frame_id = "optitrack"
+    goal.target_pose.header.frame_id = "world"
     goal.target_pose.header.stamp = rospy.Time.now()
-    goal.target_pose.pose.position.x = 1.0
-    goal.target_pose.pose.position.y = 1.0
+    goal.target_pose.pose.position.x = 0.0
+    goal.target_pose.pose.position.y = 0.0
     goal.target_pose.pose.orientation.w = 0.1
 
     client.send_goal(goal)
