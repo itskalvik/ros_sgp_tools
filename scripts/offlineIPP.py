@@ -3,8 +3,8 @@
 import gpflow
 import numpy as np
 from sgptools.utils.tsp import run_tsp
-from sgptools.utils.sensor_placement import *
-from sgptools.models.transformations import IPPTransformer
+from sgptools.models.continuous_sgp import *
+from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
 
 from ros_sgp_ipp.msg import OfflineIPPData
@@ -62,22 +62,22 @@ class offlineIPP:
                                      num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
-        path_idx, _ = run_tsp(Xu_init, num_vehicles=self.num_robots)
-        Xu_init =  [Xu_init[path] for path in path_idx]
-        Xu_init = np.concatenate(Xu_init, axis=0)
+        Xu_init, _ = run_tsp(Xu_init, 
+                             num_vehicles=self.num_robots,
+                             resample=self.num_waypoints)
+        Xu_init = Xu_init.reshape(-1, 2)
 
         # Optimize the SGP
-        IPP_model, _ = get_aug_sgp_sol(self.num_waypoints, 
-                                       self.X_train,
-                                       likelihood_variance,
-                                       kernel,
-                                       transformer,
-                                       Xu_init=Xu_init)
+        IPP_model, _ = continuous_sgp(self.num_waypoints, 
+                                      self.X_train,
+                                      likelihood_variance,
+                                      kernel,
+                                      transformer,
+                                      Xu_init=Xu_init)
 
         # Generate new paths from optimized waypoints
-        self.waypoints = IPP_model.inducing_variable.Z.numpy()
-        path_idx, _  = run_tsp(self.waypoints, num_vehicles=self.num_robots)
-        self.waypoints =  [self.waypoints[path] for path in path_idx]
+        self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
+                                                                       self.num_waypoints, -1)
 
         # Print path lengths
         rospy.loginfo('OfflineIPP: Initial IPP solution found')
@@ -153,8 +153,8 @@ class offlineIPP:
 if __name__ == '__main__':
 
     # Define the extent of the environment
-    xx = np.linspace(-2, 2, 25)
-    yy = np.linspace(-2, 2, 25)
+    xx = np.linspace(-1.5, 1.5, 25)
+    yy = np.linspace(-1.5, 1.5, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Get model parameters

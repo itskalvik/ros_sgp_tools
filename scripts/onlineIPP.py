@@ -2,9 +2,8 @@
 
 import gpflow
 import numpy as np
-from sgptools.utils.sensor_placement import *
-from sgptools.models.osgpr import OSGPR_VFE
-from sgptools.models.transformations import IPPTransformer
+from sgptools.models.continuous_sgp import *
+from sgptools.models.core.transformations import *
 
 from ros_sgp_ipp.srv import Waypoints, OfflineIPP, OfflineIPPResponse
 from ros_sgp_ipp.msg import SensorData, WaypointsList
@@ -111,38 +110,19 @@ class OnlineIPP:
         # Initilize SGP for IPP with path received from offline IPP node
         self.transformer = IPPTransformer(n_dim=2,
                                           num_robots=1)
-        self.IPP_model, _ = get_aug_sgp_sol(self.num_waypoints, 
-                                            self.X_train,
-                                            likelihood_variance,
-                                            kernel,
-                                            self.transformer,
-                                            num_steps=0,
-                                            Xu_init=self.waypoints)
-
-        # Initilize a SGPR model with random parameters for the OSGPR
-        # The X_train and y_train are not used to optimize the kernel parameters
-        # but they effect the initial inducing point locations, i.e., limits them
-        # to the bounds of the data
-        Z_init = get_inducing_pts(self.X_train, self.num_param_inducing)
-        init_param = gpflow.models.SGPR((self.X_train, np.zeros((self.X_train.shape[0], 1))),
-                                        kernel=kernel,
-                                        inducing_variable=Z_init, 
-                                        noise_variance=likelihood_variance)
+        self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
+                                           self.X_train,
+                                           likelihood_variance,
+                                           kernel,
+                                           self.transformer,
+                                           max_steps=0,
+                                           Xu_init=self.waypoints)
         
-        # Initialize the OSGPR model using the parameters from the SGPR model
-        # The X_train and y_train here will be overwritten in the online phase
-        X_train = np.array([[0, 0], [0, 0]])
-        y_train = np.array([0, 0]).reshape(-1, 1)
-        Zopt = init_param.inducing_variable.Z.numpy()
-        mu, Su = init_param.predict_f(Zopt, full_cov=True)
-        Kaa = init_param.kernel(Zopt)
-        self.param_model = OSGPR_VFE((X_train, y_train),
-                                     init_param.kernel,
-                                     mu, Su[0], Kaa,
-                                     Zopt, Zopt)
-        self.param_model.likelihood.variance.assign(init_param.likelihood.variance)
-
-        del init_param
+        # Initialize the OSGPR model
+        xx = np.linspace(-1.5, 1.5, 25)
+        yy = np.linspace(-1.5, 1.5, 25)
+        X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
+        self.param_model = init_osgpr(X_train, num_inducing=40)
 
     '''
     Callback to get the current waypoint. If the robot has reached a waypoint and 
@@ -212,7 +192,7 @@ class OnlineIPP:
         # Get the new inducing points for the path
         self.IPP_model.update(self.param_model.likelihood.variance,
                               self.param_model.kernel)
-        optimize_model(self.IPP_model, num_steps=100, 
+        optimize_model(self.IPP_model, max_steps=100, 
                        kernel_grad=False, 
                        lr=1e-2, opt='adam')
 

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import os
 import rospy
 import numpy as np
-import netCDF4 as nc
-from pathlib import Path
+from sgptools.utils.data import *
 from scipy.spatial import cKDTree
 from ros_sgp_ipp.msg import SensorData
 from geometry_msgs.msg import PoseStamped
@@ -16,9 +14,7 @@ class DataPublisher:
         self.ns = rospy.get_namespace()
 
         # Setup data
-        home = str(Path.home())
-        filepath = os.path.join(home, 'sgp-tools/datasets/ROMS.nc')
-        self.dataset_X, self.dataset_y = self.prep_salinity_data(filepath)
+        _, _, _, _, _, self.dataset_X, self.dataset_y = get_dataset('synthetic')
         self.tree = cKDTree(self.dataset_X)
 
         rospy.Subscriber('/vrpn_client_node'+self.ns+'pose',
