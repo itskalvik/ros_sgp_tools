@@ -40,7 +40,7 @@ class TrajectoryPlanner:
         self.current_waypoint_publisher = rospy.Publisher('current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node'+self.ns+'pose',
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/tb3/pose',
                                                 PoseStamped, 
                                                 self.position_callback)
         
@@ -61,16 +61,61 @@ class TrajectoryPlanner:
         self.current_waypoint = -1
         
         # Create the trajectory controller
-        self.get_control_cmd = create_hybrid_unicycle_pose_controller(angular_velocity_gain=0.6,
+        self.get_control_cmd = create_hybrid_unicycle_pose_controller(linear_velocity_gain=2.0,
+                                                                      angular_velocity_gain=0.6,
                                                                       position_error=0.1, 
                                                                       position_epsilon=0.3, 
                                                                       rotation_error=0.1)                                                                      
         
+        self.rate = rospy.Rate(update_rate)
         rospy.loginfo(self.ns+'Trajectory Planner: initialized, waiting for waypoints')
 
         # Keep alive until waypoints are received and then send vel commands at update rate
-        self.rate = rospy.Rate(update_rate)
         rospy.spin()
+
+    '''
+    Move the robot to a goal position using the Single-Integrator Dynamics 
+    and Unicycle Control Commands mapping. 
+
+    Args:
+        goal: Goal position [x, y]      
+    '''
+    def move2goal(self, goal):
+        goal.append(0.0)
+        rotation_complete = False
+        while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
+            and not rospy.is_shutdown():
+
+            # Compute best approach angle to goal
+            goal[2] = np.arctan2(goal[1] - self.position[1], goal[0] - self.position[0])
+
+            # Rotate the robot towards the goal first
+            if not rotation_complete:
+                error_angle = goal[2] - self.position[2]
+                # Wrap the angle to [-π, π]
+                error_angle = np.arctan2(np.sin(error_angle),np.cos(error_angle))
+
+                if np.abs(error_angle) > self.angle_tolerance:
+                    control_cmd = [[0.], [error_angle*0.6]]
+                else:
+                    rotation_complete = True
+                    continue
+            # Move the robot to the goal
+            else:      
+                control_cmd = self.get_control_cmd(np.array(self.position).reshape(-1, 1), 
+                                                   np.array(goal).reshape(-1, 1))
+
+            # Publish the control command
+            self.control_cmd.linear.x = control_cmd[0][0]
+            self.control_cmd.angular.z = control_cmd[1][0]
+            self.control_publisher.publish(self.control_cmd)
+
+            self.rate.sleep()
+
+        # Stop the robot
+        self.control_cmd.linear.x = 0
+        self.control_cmd.angular.z = 0
+        self.control_publisher.publish(self.control_cmd)
 
     def publish_current_waypoint(self, timer):
         self.current_waypoint_publisher.publish(self.current_waypoint)
@@ -108,50 +153,6 @@ class TrajectoryPlanner:
         # Shutdown after visiting the waypoints 
         rospy.loginfo(self.ns+'Trajectory Planner: All waypoints visited')
         rospy.signal_shutdown(self.ns+'Trajectory Planner: Received shutdown signal')
-
-    '''
-    Move the robot to a goal position using the Single-Integrator Dynamics 
-    and Unicycle Control Commands mapping. 
-
-    Args:
-        goal: Goal position [x, y]      
-    '''
-    def move2goal(self, goal):
-        goal.append(0.0)
-        rotation_complete = False
-        while np.linalg.norm(self.position[0:2] - goal[0:2]) > self.distance_tolerance \
-            and not rospy.is_shutdown():
-            # Compute best approach angle to goal
-            goal[2] = np.arctan2(goal[1] - self.position[1], goal[0] - self.position[0])
-
-            # Rotate the robot towards the goal first
-            if not rotation_complete:
-                error_angle = goal[2] - self.position[2]
-                # Wrap the angle to [-π, π]
-                error_angle = np.arctan2(np.sin(error_angle),np.cos(error_angle))
-
-                if np.abs(error_angle) > self.angle_tolerance:
-                    control_cmd = [[0.], [error_angle*0.6]]
-                else:
-                    rotation_complete = True
-                    rospy.loginfo(self.ns+'Rotation complete')
-                    continue
-            # Move the robot to the goal
-            else:      
-                control_cmd = self.get_control_cmd(np.array(self.position).reshape(-1, 1), 
-                                                   np.array(goal).reshape(-1, 1))
-
-            # Publish the control command
-            self.control_cmd.linear.x = control_cmd[0][0]
-            self.control_cmd.angular.z = control_cmd[1][0]
-            self.control_publisher.publish(self.control_cmd)
-
-            self.rate.sleep()
-
-        # Stop the robot
-        self.control_cmd.linear.x = 0
-        self.control_cmd.angular.z = 0
-        self.control_publisher.publish(self.control_cmd)
 
     def position_callback(self, msg):
         q = [msg.pose.orientation.x,
