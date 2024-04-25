@@ -194,7 +194,7 @@ class OnlineIPP:
                               self.param_model.kernel)
         optimize_model(self.IPP_model, max_steps=100, 
                        kernel_grad=False, 
-                       lr=1e-2, opt='adam')
+                       lr=1e-2, optimizer='adam')
 
         self.waypoints = self.IPP_model.inducing_variable.Z
         self.waypoints = self.IPP_model.transformer.expand(self.waypoints).numpy()
@@ -203,7 +203,7 @@ class OnlineIPP:
         """Update the OSGPR parameters."""
         # Get the new inducing points for the path
         self.param_model.update((X_new, y_new))
-        optimize_model(self.param_model, opt='scipy')
+        optimize_model(self.param_model, optimizer='scipy')
 
 
 def main():

@@ -40,7 +40,7 @@ class TrajectoryPlanner:
         self.current_waypoint_publisher = rospy.Publisher('current_waypoint',
                                                           Int32,
                                                           queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node/tb3/pose',
+        self.pose_subscriber = rospy.Subscriber('/vrpn_client_node'+self.ns+'pose',
                                                 PoseStamped, 
                                                 self.position_callback)
         
