@@ -9,6 +9,9 @@
   
   <group ns = "tb3_0">
     <!-- Load the robot launch file -->
+    <include file="$(find turtlebot3_bringup)/launch/turtlebot3_robot.launch" />
+
+    <!-- 
     <node name="limo_base_node" pkg="limo_base" type="limo_base_node" output="screen" >
         <param name="port_name" value="ttyTHS0" />
         <param name="odom_frame" value="odom" />
@@ -20,6 +23,7 @@
         <remap from="/cmd_vel" to="cmd_vel"/>
         <remap from="/limo_status" to="limo_status"/>
     </node>
+    -->
 
     <!-- Load the data publisher node -->
     <node pkg="ros_sgp_ipp" name="data_publisher" type="data_publisher.py" output="screen" />
