@@ -6,16 +6,33 @@ from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
+import tensorflow as tf
 
-from ros_sgp_tools.msg import IPPData
-from ros_sgp_tools.srv import IPP
+from sgptools.utils.metrics import *
+from sgptools.utils.data import *
+from sgptools.utils.misc import *
+from sgptools.utils.tsp import run_tsp
+from sgptools.utils.gpflow import get_model_params
+
+from sgptools.models.cma_es import *
+from sgptools.models.continuous_sgp import *
+from sgptools.models.greedy_sgp import *
+from sgptools.models.greedy_mi import *
+from sgptools.models.bo import *
+from sgptools.models.core.transformations import IPPTransform
+
+from ros_sgp_ipp.msg import OfflineIPPData
+from ros_sgp_ipp.srv import OfflineIPP
 from geometry_msgs.msg import Point
+
 import rclpy
+from rclpy.node import Node
+from rclpy.exceptions import InvalidServiceNameException
 
 import matplotlib.pyplot as plt
 np.random.seed(2021)
 
-class OfflineIPP:
+class offlineIPP(Node):
     """
     Class to create an offline IPP mission.
 
@@ -33,13 +50,12 @@ class OfflineIPP:
     def __init__(self, X_train, 
                  num_waypoints=10, 
                  num_robots=1):
-        super().__init__()
+        super().__init__('offline_ipp')
 
         # Setup the ROS node
-        rospy.init_node('offline_ipp', anonymous=True)
-        rospy.loginfo('Initializing offline IPP mission')
+        self.get_logger().info('Initializing offline IPP mission')
 
-        self.X_train = X_train
+        self.X_train = np.array(X_train).reshape(-1, 2)
         self.num_waypoints = num_waypoints
         self.num_robots = num_robots
 
@@ -48,8 +64,8 @@ class OfflineIPP:
 
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
-        rospy.loginfo('OfflineIPP: Initial waypoints synced with the trajectory planner')
-        rospy.loginfo('Shutting down offline IPP node')
+        self.get_logger().info('OfflineIPP: Initial waypoints synced with the trajectory planner')
+        self.get_logger().info('Shutting down offline IPP node')
 
     def compute_init_paths(self):
         # Initialize random SGP parameters
@@ -58,10 +74,11 @@ class OfflineIPP:
                                     lengthscales=1.0)
 
         # Get the initial IPP solution
-        transformer = IPPTransformer(n_dim=2, 
+        transformer = IPPTransform(n_dim=2, 
                                      num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
+
         Xu_init, _ = run_tsp(Xu_init, 
                              num_vehicles=self.num_robots,
                              resample=self.num_waypoints)
@@ -80,12 +97,12 @@ class OfflineIPP:
                                                                        self.num_waypoints, -1)
 
         # Print path lengths
-        rospy.loginfo('OfflineIPP: Initial IPP solution found')
+        self.get_logger().info('OfflineIPP: Initial IPP solution found') 
         path_lengths = transformer.distance(np.concatenate(self.waypoints, axis=0)).numpy()
         msg = 'Initial path lengths: '
         for path_length in path_lengths:
             msg += f'{path_length:.2f} '
-        rospy.loginfo(msg)
+        self.get_logger().info(msg)
 
         # Generate unlabeled training data for each robot
         self.get_training_sets()
@@ -135,22 +152,37 @@ class OfflineIPP:
     def sync_waypoints(self):
         for robot_idx in range(self.num_robots):
             service = f'tb3_{robot_idx}/offlineIPP'
-            rospy.wait_for_service(service)
+            offline_ipp_service = self.create_client(OfflineIPP, service)
+            self.get_logger().info(service)
+
             try:
-                offline_ipp_service = rospy.ServiceProxy(service, IPP)
-                service_data = IPPData()
+                while not offline_ipp_service.wait_for_service(timeout_sec=1.0):
+                    self.get_logger().info('service not avaliable, waiting...')
+
+                service_data = OfflineIPPData()
                 for waypoint in self.waypoints[robot_idx]:
                     service_data.waypoints.append(Point(x=waypoint[0],
                                                         y=waypoint[1]))
                 for point in self.data[robot_idx]:
                     service_data.x_train.append(Point(x=point[0],
                                                       y=point[1]))
-                success = offline_ipp_service(service_data)
-            except rospy.ServiceException as e:
+                success = offline_ipp_service.call_async(service_data)
+                rclpy.sign_until_future_complete(self, success)
+                if future.result() is not None:
+                    self.get_logger().info(f'Service call successful')
+                else:
+                    self.get_logger().info(f'Service call failed: {future.exeception()}')
+            except Exception as e:
                 print(f'Service call failed: {e}')
 
 
 if __name__ == '__main__':
+
+    rclpy.init()
+
+    X_train_data = [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]]
+
+    node = offlineIPP(X_train=X_train_data)
 
     # Define the extent of the environment
     xx = np.linspace(-1.5, 1.5, 25)
@@ -158,17 +190,17 @@ if __name__ == '__main__':
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Get model parameters
-    if rospy.has_param('/num_waypoints'):
-        num_waypoints=rospy.get_param('/num_waypoints')
+    if node.has_parameter('/num_waypoints'):
+        num_waypoints=self.get_parameter('/num_waypoints')
     else:
         num_waypoints=10
 
-    if rospy.has_param('/num_robots'):
-        num_robots=rospy.get_param('/num_robots')
+    if node.has_parameter('/num_robots'):
+        num_robots=self.get_parameter('/num_robots')
     else:
         num_robots=1
 
     # Start the offline IPP mission
-    OfflineIPP(X_train, 
+    offlineIPP(X_train, 
                num_waypoints=num_waypoints, 
                num_robots=num_robots)
