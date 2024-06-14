@@ -39,6 +39,7 @@ endif()
 # Install Python executables
 install(PROGRAMS
   scripts/offline_ipp.py
+  scripts/onlineTest.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

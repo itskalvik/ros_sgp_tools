@@ -8,29 +8,16 @@ from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
 import tensorflow as tf
 
-from sgptools.utils.metrics import *
-from sgptools.utils.data import *
-from sgptools.utils.misc import *
-from sgptools.utils.tsp import run_tsp
-from sgptools.utils.gpflow import get_model_params
-
-from sgptools.models.cma_es import *
-from sgptools.models.continuous_sgp import *
-from sgptools.models.greedy_sgp import *
-from sgptools.models.greedy_mi import *
-from sgptools.models.bo import *
-from sgptools.models.core.transformations import IPPTransform
-
-from ros_sgp_ipp.msg import OfflineIPPData
-from ros_sgp_ipp.srv import OfflineIPP
+from ros_sgp_tools.msg import IPPData
+from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
 
 import rclpy
 from rclpy.node import Node
-from rclpy.exceptions import InvalidServiceNameException
 
 import matplotlib.pyplot as plt
 np.random.seed(2021)
+
 
 class offlineIPP(Node):
     """
@@ -151,23 +138,23 @@ class offlineIPP(Node):
     '''
     def sync_waypoints(self):
         for robot_idx in range(self.num_robots):
-            service = f'tb3_{robot_idx}/offlineIPP'
-            offline_ipp_service = self.create_client(OfflineIPP, service)
+            service = f'/tb3_{robot_idx}/offlineIPP'
+            offline_ipp_service = self.create_client(IPP, service)
             self.get_logger().info(service)
+            request = IPP.Request()
 
             try:
                 while not offline_ipp_service.wait_for_service(timeout_sec=1.0):
                     self.get_logger().info('service not avaliable, waiting...')
 
-                service_data = OfflineIPPData()
                 for waypoint in self.waypoints[robot_idx]:
-                    service_data.waypoints.append(Point(x=waypoint[0],
+                    request.data.waypoints.append(Point(x=waypoint[0],
                                                         y=waypoint[1]))
                 for point in self.data[robot_idx]:
-                    service_data.x_train.append(Point(x=point[0],
+                    request.data.x_train.append(Point(x=point[0],
                                                       y=point[1]))
-                success = offline_ipp_service.call_async(service_data)
-                rclpy.sign_until_future_complete(self, success)
+                future = offline_ipp_service.call_async(request)
+                rclpy.spin_until_future_complete(self, future)
                 if future.result() is not None:
                     self.get_logger().info(f'Service call successful')
                 else:
@@ -184,11 +171,14 @@ if __name__ == '__main__':
 
     node = offlineIPP(X_train=X_train_data)
 
+    '''
     # Define the extent of the environment
     xx = np.linspace(-1.5, 1.5, 25)
     yy = np.linspace(-1.5, 1.5, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
+
+    # https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
     # Get model parameters
     if node.has_parameter('/num_waypoints'):
         num_waypoints=self.get_parameter('/num_waypoints')
@@ -204,3 +194,5 @@ if __name__ == '__main__':
     offlineIPP(X_train, 
                num_waypoints=num_waypoints, 
                num_robots=num_robots)
+
+    '''
