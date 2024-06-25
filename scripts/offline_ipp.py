@@ -166,16 +166,13 @@ class offlineIPP(Node):
 if __name__ == '__main__':
 
     rclpy.init()
-
-    X_train_data = [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]]
-
-    node = offlineIPP(X_train=X_train_data)
-
-    '''
+    
     # Define the extent of the environment
     xx = np.linspace(-1.5, 1.5, 25)
     yy = np.linspace(-1.5, 1.5, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
+
+    node = offlineIPP(X_train)
 
 
     # https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
@@ -191,8 +188,4 @@ if __name__ == '__main__':
         num_robots=1
 
     # Start the offline IPP mission
-    offlineIPP(X_train, 
-               num_waypoints=num_waypoints, 
-               num_robots=num_robots)
-
-    '''
+    # offlineIPP(X_train)
