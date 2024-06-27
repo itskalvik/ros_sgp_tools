@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from ros_sgp_ipp.srv import Waypoints
+from ros_sgp_tools.srv import Waypoints
 from geometry_msgs.msg import Twist, PoseStamped
 from std_msgs.msg import Int32
 
@@ -39,12 +39,11 @@ class PathPlanner(Node):
         
     def waypoint_service_callback(self, request, response):
         waypoints = request.waypoints.waypoints
-        print(waypoints)
         self.waypoints = []
         for i in range(len(waypoints)):
-            self.waypoints.waypoints.append([waypoints[i].x, waypoints[i].y])
+        ##for waypoint in waypoints:
+            self.waypoints.append([waypoints[i].x, waypoints[i].y])
         self.get_logger().info(self.ns+'Path Planner: Waypoints received')
-        print(waypoints)
         response.current_waypoint = self.current_waypoint
         return response
 
