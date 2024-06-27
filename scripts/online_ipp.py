@@ -55,14 +55,15 @@ class OnlineIPP(Node):
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 
-                                                'tb3_0/offlineIPP', 
-                                                self.offlineIPP_service_callback)
+                                       'tb3_0/offlineIPP', 
+                                        self.offlineIPP_service_callback)
         
         # Wait to get the waypoints from the offline IPP planner
         # Stop service after receiving the waypoints from the offline IPP planner
-        while not rclpy.ok() and self.waypoints is None:
+        while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
             
+        print(self.waypoints)
         del self.srv
 
         # Init the sgp models for online IPP and parameter estimation
@@ -144,7 +145,7 @@ class OnlineIPP(Node):
         elif msg.data > self.current_waypoint:
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
-        ##print(self.current_waypoint) #For testing
+        print(self.current_waypoint) #For testing
 
     def data_callback(self, msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
@@ -157,7 +158,7 @@ class OnlineIPP(Node):
         # Send the new waypoints to the trajectory planner and 
         # update the current waypoint from the service
         
-        waypoints_service = self.create_client(Waypoints, 'waypoints')
+        waypoints_service = self.create_client(Waypoints, '/waypoints')
         request = Waypoints.Request()
 
         try:
