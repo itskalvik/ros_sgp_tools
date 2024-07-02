@@ -12,7 +12,10 @@ import numpy as np
 
 class PathPlanner(Node):
 
-    def __init__(self, distance_tolerance=0.1, angle_tolerance=0.1, update_rate=30,):
+    def __init__(self, distance_tolerance=0.1,
+                  angle_tolerance=0.1,
+                  update_rate=30,):
+        
         self.distance_tolerance = distance_tolerance
         self.angle_tolerance = angle_tolerance
 
@@ -20,12 +23,20 @@ class PathPlanner(Node):
 
         self.ns = self.get_namespace()
 
-        self.current_waypoint_publisher = self.create_publisher(Int32, 'current_waypoint', 10)
-        self.waypoint_service = self.create_service(Waypoints,'/waypoints',self.waypoint_service_callback)
+        # Setup current waypoint publisher
+        self.current_waypoint_publisher = self.create_publisher(Int32, 
+                                                                'current_waypoint', 
+                                                                10)
+        
+        # Serup waypoint service
+        self.waypoint_service = self.create_service(Waypoints,
+                                                    '/waypoints',
+                                                    self.waypoint_service_callback)
       
         self.current_waypoint_timer = self.create_timer(update_rate/100, self.publish_current_waypoint)
 
 
+        # Setup ROS Node
         self.position = np.array([0, 0, 0])
         self.control_cmd = Twist()
         self.waypoints = [] 
@@ -36,28 +47,7 @@ class PathPlanner(Node):
 
         # Keep alive until waypoints are received and then send vel commands at update rate
         rclpy.spin(self)
-        
-    def waypoint_service_callback(self, request, response):
-        waypoints = request.waypoints.waypoints
-        self.waypoints = []
-        for i in range(len(waypoints)):
-        ##for waypoint in waypoints:
-            self.waypoints.append([waypoints[i].x, waypoints[i].y])
-        self.get_logger().info(self.ns+'Path Planner: Waypoints received')
-        response.current_waypoint = self.current_waypoint
-        return response
 
-    
-    def publish_current_waypoint(self):
-        current_waypoint_msg = Int32()
-        current_waypoint_msg.data = self.current_waypoint
-        self.current_waypoint_publisher.publish(current_waypoint_msg)
-    
-'''
-class GuidedMission(Node):
-    """Class to create a guided mission."""
-
-    def __init__(self) -> None:
         super().__init__('mavros_control')
 
         # Create QoS profiles
@@ -106,6 +96,21 @@ class GuidedMission(Node):
 
         # Create a timer to publish control commands
         self.timer = self.create_timer(0.1, self.timer_callback)
+        
+    def waypoint_service_callback(self, request, response):
+        waypoints = request.waypoints.waypoints
+        self.waypoints = []
+        for i in range(len(waypoints)):
+            self.waypoints.append([waypoints[i].x, waypoints[i].y])
+        self.get_logger().info(self.ns+'Path Planner: Waypoints received')
+        response.current_waypoint = self.current_waypoint
+        return response
+
+    
+    def publish_current_waypoint(self):
+        current_waypoint_msg = Int32()
+        current_waypoint_msg.data = self.current_waypoint
+        self.current_waypoint_publisher.publish(current_waypoint_msg)    
 
     def at_waypoint(self, waypoint, tolerance=0.5):
         """Check if the vehicle is at the waypoint."""
@@ -191,25 +196,6 @@ class GuidedMission(Node):
                 exit()
             self.set_waypoint(0., 0.)
 
-
-def main(args=None) -> None:
-    print('Starting guided mission')
-    rclpy.init(args=args)
-
-    mission = GuidedMission()
-
-    rclpy.spin(mission)
-    mission.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    try:
-        main()
-    except Exception as e:
-        print(e)
-
-''' 
 
 def main(args=None):
     
