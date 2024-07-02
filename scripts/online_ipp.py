@@ -41,7 +41,6 @@ class OnlineIPP(Node):
         # setup variables
         self.waypoints = None
         self.num_param_inducing = num_param_inducing
-        print(self.num_param_inducing)
 
         # Setup the data buffers and the current waypoint
         self.data_X = []
@@ -63,7 +62,6 @@ class OnlineIPP(Node):
         while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
             
-        print(self.waypoints)
         del self.srv
 
         # Init the sgp models for online IPP and parameter estimation
@@ -145,7 +143,6 @@ class OnlineIPP(Node):
         elif msg.data > self.current_waypoint:
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
-        print(self.current_waypoint) #For testing
 
     def data_callback(self, msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
