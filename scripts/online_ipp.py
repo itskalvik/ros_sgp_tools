@@ -4,15 +4,18 @@ import gpflow
 import numpy as np
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
+from sgptools.models.core.osgpr import *
 
-from ros_sgp_ipp.srv import Waypoints, OfflineIPP, OfflineIPPResponse
-from ros_sgp_ipp.msg import SensorData, WaypointsList
+from ros_sgp_tools.srv import Waypoints, IPP
+from ros_sgp_tools.msg import SensorData, WaypointsList, IPPData
 from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
 
 
-class OnlineIPP:
+class OnlineIPP(Node):
     """
     Class to create an online IPP mission.
 
@@ -27,56 +30,62 @@ class OnlineIPP:
     def __init__(self, 
                  num_param_inducing=40,
                  buffer_size=100):
-        super().__init__()
+        super().__init__('online_ipp')
 
         # Setup the ROS node
-        rospy.init_node('online_ipp', anonymous=True)  
-        self.ns = rospy.get_namespace()
-                    
-        rospy.loginfo(self.ns+'OnlineIPP: Initializing')
+        self.ns = self.get_namespace()
+        qos_profile = QoSProfile(depth=10)  
+        
+        self.get_logger().info(self.ns+'OnlineIPP: Initializing')
 
         # setup variables
         self.waypoints = None
         self.num_param_inducing = num_param_inducing
-        print(self.num_param_inducing)
 
         # Setup the data buffers and the current waypoint
         self.data_X = []
         self.data_y = []
         self.buffer_size = buffer_size
         self.current_waypoint = 0
+        self.num_waypoints = 10
+        xx = np.linspace(-1.5, 1.5, 25)
+        yy = np.linspace(-1.5, 1.5, 25)
+        self.X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
         # Setup the service to receive the waypoints and X_train data
-        self.offlineIPP_service = rospy.Service('offlineIPP', 
-                                                OfflineIPP, 
-                                                self.offlineIPP_service_callback)
+        self.srv = self.create_service(IPP, 
+                                       'tb3_0/offlineIPP', 
+                                        self.offlineIPP_service_callback)
         
         # Wait to get the waypoints from the offline IPP planner
         # Stop service after receiving the waypoints from the offline IPP planner
-        while not rospy.is_shutdown() and self.waypoints is None:
-            rospy.sleep(1)
-        del self.offlineIPP_service
+        while rclpy.ok() and self.waypoints is None:
+            rclpy.spin_once(self, timeout_sec=1.0)
+            
+        del self.srv
 
         # Init the sgp models for online IPP and parameter estimation
         self.init_sgp_models()
         
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
-        rospy.loginfo(self.ns+'OnlineIPP: Initial waypoints synced with the trajectory planner')
 
+        self.get_logger().info(self.ns+'OnlineIPP: Initial waypoints synced with the trajectory planner')
+
+        
         # Setup the subscribers
-        rospy.Subscriber(self.ns+'sensor_data',
-                         SensorData,
-                         self.data_callback)
+        self.create_subscription(SensorData,
+                         self.ns+'sensor_data',
+                         self.data_callback, qos_profile)
                                                                    
-        rospy.Subscriber(self.ns+'current_waypoint', 
-                         Int32, 
-                         self.current_waypoint_callback)
+        self.create_subscription(Int32, 
+                         self.ns+'current_waypoint', 
+                         self.current_waypoint_callback, qos_profile)
 
         # Setup the timer to update the parameters and waypoints
-        self.timer = rospy.Timer(rospy.Duration(5), self.update_with_data)
+        self.timer = self.create_timer(5.0, self.update_with_data)
 
-        rospy.spin()
+        rclpy.spin(self)
 
     '''
     Service callback to receive the waypoints and X_train data from offlineIPP node
@@ -86,29 +95,29 @@ class OnlineIPP:
     Returns:
         WaypointsResponse: Response containing the success flag
     '''
-    def offlineIPP_service_callback(self, req):
-        data = req.data.waypoints
+    def offlineIPP_service_callback(self, request, response):
+
+        data = request.data.waypoints
         self.waypoints = []
         for i in range(len(data)):
             self.waypoints.append([data[i].x, data[i].y])
         self.num_waypoints = len(self.waypoints)
 
-        data = req.data.x_train
+        data = request.data.x_train
         self.X_train = []
         for i in range(len(data)):
-            self.X_train.append([data[i].x, data[i].y])
+            self.X_train.append([float(data[i].x), float(data[i].y)])
         self.X_train = np.array(self.X_train)
-        rospy.loginfo(self.ns+'OnlineIPP: Waypoints and X_train data received')
-        return OfflineIPPResponse(True)
+        response.success = True
+        return response
     
     def init_sgp_models(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
         kernel = gpflow.kernels.RBF(variance=1.0, 
                                     lengthscales=1.0)
-
         # Initilize SGP for IPP with path received from offline IPP node
-        self.transformer = IPPTransformer(n_dim=2,
+        self.transformer = IPPTransform(n_dim=2,
                                           num_robots=1)
         self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                            self.X_train,
@@ -117,7 +126,6 @@ class OnlineIPP:
                                            self.transformer,
                                            max_steps=0,
                                            Xu_init=self.waypoints)
-        
         # Initialize the OSGPR model
         xx = np.linspace(-1.5, 1.5, 25)
         yy = np.linspace(-1.5, 1.5, 25)
@@ -130,7 +138,8 @@ class OnlineIPP:
     '''
     def current_waypoint_callback(self, msg):
         if msg.data == self.num_waypoints:
-            rospy.signal_shutdown(self.ns+'OnlineIPP: Mission complete')
+            self.get_logger().info(self.ns+'OnlineIPP: Mission complete')
+            rclpy.shutdown()
         elif msg.data > self.current_waypoint:
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
@@ -145,15 +154,25 @@ class OnlineIPP:
     def sync_waypoints(self):
         # Send the new waypoints to the trajectory planner and 
         # update the current waypoint from the service
-        rospy.wait_for_service('waypoints')
+        
+        waypoints_service = self.create_client(Waypoints, '/waypoints')
+        request = Waypoints.Request()
+
         try:
-            waypoint_service = rospy.ServiceProxy('waypoints', Waypoints)
-            waypoints = WaypointsList()
+            while not waypoints_service.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info('service not avaliable, waiting...')
+
             for waypoint in self.waypoints:
-                waypoints.waypoints.append(Point(x=waypoint[0],
-                                                 y=waypoint[1]))
-            success = waypoint_service(waypoints)
-        except rospy.ServiceException as e:
+                request.waypoints.waypoints.append(Point(x=waypoint[0],
+                                                        y=waypoint[1]))
+            
+            future = waypoints_service.call_async(request)
+            rclpy.spin_until_future_complete(self, future)
+            if future.result() is not None:
+                self.get_logger().info(f'Service call successful')
+            else:
+                self.get_logger().info(f'Service call failed: {future.exeception()}')
+        except Exception as e:
             print(self.ns+f': Service call failed: {e}')
 
     def update_with_data(self, timer=None, force_update=False):
@@ -162,7 +181,7 @@ class OnlineIPP:
         if len(self.data_X) > self.buffer_size or (force_update and \
               len(self.data_X) > self.num_param_inducing):
             
-            rospy.loginfo(self.ns+'OnlineIPP: Updating parameters and waypoints')
+            self.get_logger().info(self.ns+'OnlineIPP: Updating parameters and waypoints')
 
             # Make local copies of the data
             data_X = np.array(self.data_X).reshape(-1, 2)
@@ -179,7 +198,7 @@ class OnlineIPP:
 
             # Sync the waypoints with the trajectory planner
             self.sync_waypoints()
-            rospy.loginfo(self.ns+'OnlineIPP: Updated waypoints synced with the trajectory planner')
+            self.get_logger().info(self.ns+'OnlineIPP: Updated waypoints synced with the trajectory planner')
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
@@ -206,9 +225,13 @@ class OnlineIPP:
         optimize_model(self.param_model, optimizer='scipy')
 
 
-def main():
+def main(args=None):
     # Start the online IPP mission
-    OnlineIPP()
+    rclpy.init(args=args)
+    online_ipp = OnlineIPP()
+    rclpy.spin(online_ipp)
+    rclpy.shutdown()
+    ### OnlineIPP()
 
 if __name__ == '__main__':
     try:
