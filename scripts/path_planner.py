@@ -48,8 +48,6 @@ class PathPlanner(Node):
         # Keep alive until waypoints are received and then send vel commands at update rate
         rclpy.spin(self)
 
-        super().__init__('mavros_control')
-
         # Create QoS profiles
 
         # STATE_QOS used for state topics, like ~/state, ~/mission/waypoints etc.
