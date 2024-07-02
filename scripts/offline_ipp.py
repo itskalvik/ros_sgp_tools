@@ -35,8 +35,8 @@ class offlineIPP(Node):
         num_robots (int): The number of robots
     """
     def __init__(self, X_train, 
-                 num_waypoints=10, 
-                 num_robots=1):
+                 num_waypoints, 
+                 num_robots):
         super().__init__('offline_ipp')
 
         # Setup the ROS node
@@ -172,20 +172,34 @@ if __name__ == '__main__':
     yy = np.linspace(-1.5, 1.5, 25)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
-    node = offlineIPP(X_train)
-
-
     # https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Using-Parameters-In-A-Class-Python.html
     # Get model parameters
-    if node.has_parameter('/num_waypoints'):
-        num_waypoints=self.get_parameter('/num_waypoints')
+
+    # Creates a temporary node to get parameter values from launch script
+    temp = rclpy.create_node('temp_node')
+    temp.declare_parameter('num_waypoints', 0)
+    temp.declare_parameter('num_robots', 0)
+
+    # Grabs the number of waypoints
+    if temp.has_parameter('num_waypoints'):
+        num_waypoints=temp.get_parameter('num_waypoints').get_parameter_value().integer_value
     else:
         num_waypoints=10
 
-    if node.has_parameter('/num_robots'):
-        num_robots=self.get_parameter('/num_robots')
+    temp.get_logger().info('waypoints: %d' % num_waypoints)
+
+    # Grabs the number of robots
+    if temp.has_parameter('num_robots'):
+        num_robots=temp.get_parameter('num_robots').get_parameter_value().integer_value
     else:
         num_robots=1
 
+    temp.get_logger().info('robots: %d' % num_robots)
+
+    # Destorys the temporary node
+    temp.destroy_node()
+
+
     # Start the offline IPP mission
-    # offlineIPP(X_train)
+    node = offlineIPP(X_train, num_waypoints, num_robots)
+
