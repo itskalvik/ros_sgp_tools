@@ -39,10 +39,9 @@ endif()
 # Install Python executables
 install(PROGRAMS
   scripts/offline_ipp.py
-  scripts/onlineTest.py
   scripts/online_ipp.py
-  scripts/trajectory_planner.py
   scripts/path_planner.py
+  scripts/guided_mission.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
