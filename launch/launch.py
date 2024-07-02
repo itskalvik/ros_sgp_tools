@@ -6,7 +6,11 @@ def generate_launch_description():
         Node(
             package='ros_sgp_tools',
             executable='offline_ipp.py',
-            name='offline_ipp'
+            name='offline_ipp',
+            parameters=[
+                {'num_waypoints': 10},
+                {'num_robots': 1}
+            ]
         ),
         
         Node(
