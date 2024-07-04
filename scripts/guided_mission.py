@@ -14,10 +14,10 @@ from time import sleep
 import numpy as np
 
 
-class PathPlanner(Node):
+class MissionPlanner(Node):
 
     def __init__(self):
-        super().__init__('PathPlanner')
+        super().__init__('MissionPlanner')
 
         # Create QoS profiles
         # STATE_QOS used for state topics, like ~/state, ~/mission/waypoints etc.
@@ -109,8 +109,8 @@ class PathPlanner(Node):
         start_time = self.get_clock().now().to_msg().sec
         last_request = start_time-6.0
         while not self.vehicle_state.guided:
-            # Send the command only once every 5 seconds
-            if self.get_clock().now().to_msg().sec - last_request < 5.0:
+            # Send the command only once every 60 seconds
+            if self.get_clock().now().to_msg().sec - last_request < 60.0:
                 sleep(1)
                 continue
 
@@ -153,7 +153,7 @@ class PathPlanner(Node):
         return True
 
     def mission(self):
-        "GUIDED mission"
+        """GUIDED mission"""
 
         sleep(5) # Wait to get the state of the vehicle
 
@@ -166,13 +166,13 @@ class PathPlanner(Node):
         if self.go2waypoint([35.30684387683425, -80.7360063599907]):
             self.get_logger().info('Reached waypoint')
 
+        if self.go2waypoint([35.30674267884529, -80.73600329951549]):
+            self.get_logger().info('Reached waypoint')
+
         if self.go2waypoint([35.30684275566786, -80.73612370299257]):
             self.get_logger().info('Reached waypoint')
 
         if self.go2waypoint([35.30679876645213, -80.73623439122146]):
-            self.get_logger().info('Reached waypoint')
-
-        if self.go2waypoint([35.30674267884529, -80.73600329951549]):
             self.get_logger().info('Reached waypoint')
 
         if self.arm(False):
@@ -185,11 +185,11 @@ def main(args=None):
     rclpy.init(args=args)
 
     try:
-        path_planner = PathPlanner()
+        mission_planner = MissionPlanner()
 
         executor = MultiThreadedExecutor(num_threads=4)
-        executor.add_node(path_planner)
-        executor.create_task(path_planner.mission)
+        executor.add_node(mission_planner)
+        executor.create_task(mission_planner.mission)
         executor.spin()
 
     except KeyboardInterrupt:

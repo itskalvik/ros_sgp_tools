@@ -40,7 +40,7 @@ endif()
 install(PROGRAMS
   scripts/offline_ipp.py
   scripts/online_ipp.py
-  scripts/path_planner.py
+  scripts/ipp_mission.py
   scripts/guided_mission.py
   DESTINATION lib/${PROJECT_NAME}
 )
