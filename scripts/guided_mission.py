@@ -8,9 +8,7 @@ from sensor_msgs.msg import NavSatFix
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
-from rclpy.executors import MultiThreadedExecutor
 
-from time import sleep
 import numpy as np
 
 
@@ -57,7 +55,13 @@ class MissionPlanner(Node):
         self.set_mode_request = SetMode.Request()
         self.setpoint_position = GeoPoseStamped()
 
-    def at_waypoint(self, waypoint, tolerance=0.00005):
+        # Wait to get the state of the vehicle
+        rclpy.spin_once(self, timeout_sec=5.0)
+
+        # Start mission
+        self.mission()
+
+    def at_waypoint(self, waypoint, tolerance=0.000005):
         """Check if the vehicle is at the waypoint."""
         dist = np.linalg.norm(self.vehicle_position - np.array(waypoint))
         if dist < tolerance:
@@ -87,7 +91,7 @@ class MissionPlanner(Node):
         while self.vehicle_state.armed != state:
             # Send the command only once every 5 seconds
             if self.get_clock().now().to_msg().sec - last_request < 5.0:
-                sleep(1)
+                rclpy.spin_once(self, timeout_sec=1.0)
                 continue
 
             self.arm_client.call_async(self.arm_request)
@@ -111,7 +115,7 @@ class MissionPlanner(Node):
         while self.vehicle_state.mode != mode:
             # Send the command only once every 5 seconds
             if self.get_clock().now().to_msg().sec - last_request < 5.0:
-                sleep(1)
+                rclpy.spin_once(self, timeout_sec=1.0)
                 continue
 
             self.set_mode_client.call_async(self.set_mode_request)
@@ -136,7 +140,7 @@ class MissionPlanner(Node):
         while not self.at_waypoint(waypoint):
             # Send the command only once every 5 seconds
             if self.get_clock().now().to_msg().sec - last_request < 5.0:
-                sleep(1)
+                rclpy.spin_once(self, timeout_sec=1.0)
                 continue
 
             self.setpoint_position.header.stamp = self.get_clock().now().to_msg()
@@ -154,8 +158,6 @@ class MissionPlanner(Node):
 
     def mission(self):
         """GUIDED mission"""
-
-        sleep(5) # Wait to get the state of the vehicle
 
         self.get_logger().info('Engaging MANUAL mode')
         if self.engage_mode('MANUAL'):
@@ -177,19 +179,9 @@ class MissionPlanner(Node):
         if self.go2waypoint([35.30674267884529, -80.73600329951549]):
             self.get_logger().info('Reached waypoint 2')
 
-        self.get_logger().info('Visiting waypoint 3')
-        if self.go2waypoint([35.30684275566786, -80.73612370299257]):
-            self.get_logger().info('Reached waypoint 3')
-
-        self.get_logger().info('Visiting waypoint 4')
-        if self.go2waypoint([35.30679876645213, -80.73623439122146]):
-            self.get_logger().info('Reached waypoint 4')
-
         self.get_logger().info('Disarming')
         if self.arm(False):
             self.get_logger().info('Disarmed')
-
-        rclpy.shutdown()
 
 
 def main(args=None):
@@ -197,15 +189,11 @@ def main(args=None):
 
     try:
         mission_planner = MissionPlanner()
-
-        executor = MultiThreadedExecutor(num_threads=4)
-        executor.add_node(mission_planner)
-        executor.create_task(mission_planner.mission)
-        executor.spin()
-
+        rclpy.spin_once(mission_planner)
     except KeyboardInterrupt:
         pass
     except ExternalShutdownException:
+        mission_planner.destroy_node()
         rclpy.shutdown()
     
 
