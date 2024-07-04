@@ -108,9 +108,9 @@ class MissionPlanner(Node):
         
         start_time = self.get_clock().now().to_msg().sec
         last_request = start_time-6.0
-        while not self.vehicle_state.guided:
-            # Send the command only once every 60 seconds
-            if self.get_clock().now().to_msg().sec - last_request < 60.0:
+        while self.vehicle_state.mode != mode:
+            # Send the command only once every 5 seconds
+            if self.get_clock().now().to_msg().sec - last_request < 5.0:
                 sleep(1)
                 continue
 
@@ -118,7 +118,7 @@ class MissionPlanner(Node):
             last_request = self.get_clock().now().to_msg().sec
 
             # Timeout
-            if not self.vehicle_state.guided and \
+            if self.vehicle_state.mode != mode and \
                 last_request - start_time > timeout:
                
                 self.get_logger().info(f'Timeout: Failed to engage {mode} mode')
@@ -157,24 +157,35 @@ class MissionPlanner(Node):
 
         sleep(5) # Wait to get the state of the vehicle
 
-        if self.arm(True):
-            self.get_logger().info('Armed')
+        self.get_logger().info('Engaging MANUAL mode')
+        if self.engage_mode('MANUAL'):
+            self.get_logger().info('MANUAL mode Engaged')
 
+        self.get_logger().info('Engaging GUIDED mode')
         if self.engage_mode('GUIDED'):
             self.get_logger().info('GUIDED mode Engaged')
 
+        self.get_logger().info('Arming')
+        if self.arm(True):
+            self.get_logger().info('Armed')
+
+        self.get_logger().info('Visiting waypoint 1')
         if self.go2waypoint([35.30684387683425, -80.7360063599907]):
-            self.get_logger().info('Reached waypoint')
+            self.get_logger().info('Reached waypoint 1')
 
+        self.get_logger().info('Visiting waypoint 2')
         if self.go2waypoint([35.30674267884529, -80.73600329951549]):
-            self.get_logger().info('Reached waypoint')
+            self.get_logger().info('Reached waypoint 2')
 
+        self.get_logger().info('Visiting waypoint 3')
         if self.go2waypoint([35.30684275566786, -80.73612370299257]):
-            self.get_logger().info('Reached waypoint')
+            self.get_logger().info('Reached waypoint 3')
 
+        self.get_logger().info('Visiting waypoint 4')
         if self.go2waypoint([35.30679876645213, -80.73623439122146]):
-            self.get_logger().info('Reached waypoint')
+            self.get_logger().info('Reached waypoint 4')
 
+        self.get_logger().info('Disarming')
         if self.arm(False):
             self.get_logger().info('Disarmed')
 
