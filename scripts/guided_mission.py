@@ -57,7 +57,7 @@ class MissionPlanner(Node):
         self.set_mode_request = SetMode.Request()
         self.setpoint_position = GeoPoseStamped()
 
-    def at_waypoint(self, waypoint, tolerance=0.000005):
+    def at_waypoint(self, waypoint, tolerance=0.00005):
         """Check if the vehicle is at the waypoint."""
         dist = np.linalg.norm(self.vehicle_position - np.array(waypoint))
         if dist < tolerance:
