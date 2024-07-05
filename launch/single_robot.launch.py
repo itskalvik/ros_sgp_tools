@@ -1,5 +1,7 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import ExecuteProcess
+
 
 def generate_launch_description():
     return LaunchDescription([
@@ -23,5 +25,11 @@ def generate_launch_description():
             package='ros_sgp_tools',
             executable='ipp_mission.py',
             name='ipp_mission'
+        ),
+
+        ExecuteProcess(
+            cmd=[['ros2 launch ros_sgp_tools mavros.launch']],
+            shell=True,
+            output='both'
         )
     ])
