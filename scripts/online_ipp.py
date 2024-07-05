@@ -52,8 +52,11 @@ class OnlineIPP(Node):
         self.current_waypoint = -1
 
         self.X_train = np.array(X_train).reshape(-1, 2)
+
+        # Normalize coordinates to stabilize the gradients
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(self.X_train)*10.0
+        self.y_scaler = None
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 
@@ -177,7 +180,6 @@ class OnlineIPP(Node):
         future = waypoints_service.call_async(request)
         while future.result() is not None:
             rclpy.spin_once(self, timeout_sec=0.5)
-        self.get_logger().info(f'Service call successful')
 
     def update_with_data(self, force_update=False):
         # Update the parameters and waypoints if the buffer is full and 
@@ -186,9 +188,16 @@ class OnlineIPP(Node):
         if len(self.data_X) > self.buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
-            # Make local copies of the data
+            # Make local copies of the data and normalize x locations
             data_X = np.array(self.data_X).reshape(-1, 2)
+            data_X = self.X_scaler.transform(data_X)*10.0
+
             data_y = np.array(self.data_y).reshape(-1, 1)
+            if self.y_scaler is None:
+                self.y_scaler = StandardScaler()
+                data_y = self.y_scaler.fit_transform(data_y)
+            else:
+                data_y = self.y_scaler.transform(data_y)
 
             # Empty global data buffers
             self.data_X = []
@@ -227,6 +236,7 @@ class OnlineIPP(Node):
         # Get the new inducing points for the path
         self.param_model.update((X_new, y_new))
         optimize_model(self.param_model, optimizer='scipy')
+        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy()}')
 
 
 def main():
