@@ -5,10 +5,8 @@ from std_msgs.msg import Int32
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
-from rclpy.executors import MultiThreadedExecutor
 
 from guided_mission import MissionPlanner
-from time import sleep
 
 
 class IPPMissionPlanner(MissionPlanner):
@@ -21,61 +19,59 @@ class IPPMissionPlanner(MissionPlanner):
         self.current_waypoint_timer = self.create_timer(1/10, self.publish_current_waypoint)
   
         # Setup waypoint service
-        self.waypoint_service = self.create_service(Waypoints, '/waypoints',
+        self.waypoint_service = self.create_service(Waypoints, 
+                                                    'waypoints',
                                                     self.waypoint_service_callback)
       
         # Initialize variables
-        self.waypoints = [] 
-        self.current_waypoint = -1
+        self.waypoints = None
+        self.current_waypoint = Int32()
+        self.current_waypoint.data = -1
 
         self.get_logger().info("Initialized, waiting for waypoints")
 
+        # Wait to get the waypoints from the online IPP planner
+        while rclpy.ok() and self.waypoints is None:
+            rclpy.spin_once(self, timeout_sec=1.0)
+
+        # Start visiting the waypoints
+        self.mission()
+
     def waypoint_service_callback(self, request, response):
         waypoints = request.waypoints.waypoints
+
         self.waypoints = []
         for i in range(len(waypoints)):
             self.waypoints.append([waypoints[i].x, waypoints[i].y])
-        self.get_logger().info('Waypoints received')
-        response.current_waypoint = self.current_waypoint
-        return response
 
+        self.get_logger().info('Waypoints received')
+        response.success = True
+        return response
+    
     def publish_current_waypoint(self):
-        current_waypoint_msg = Int32()
-        current_waypoint_msg.data = self.current_waypoint
-        self.current_waypoint_publisher.publish(current_waypoint_msg)    
+        self.current_waypoint_publisher.publish(self.current_waypoint)
 
     def mission(self):
-        "GUIDED mission"
+        """IPP mission"""
 
-        sleep(5) # Wait to get the state of the vehicle
-
-        if self.arm(True):
-            self.get_logger().info('Armed')
-
+        self.get_logger().info('Engaging GUIDED mode')
         if self.engage_mode('GUIDED'):
             self.get_logger().info('GUIDED mode Engaged')
 
-        self.current_waypoint = 0
-        if self.go2waypoint([35.30684387683425, -80.7360063599907]):
-            self.get_logger().info('Reached waypoint')
-            self.current_waypoint += 1
+        self.get_logger().info('Arming')
+        if self.arm(True):
+            self.get_logger().info('Armed')
 
-        if self.go2waypoint([35.30684275566786, -80.73612370299257]):
-            self.get_logger().info('Reached waypoint')
-            self.current_waypoint += 1
-
-        if self.go2waypoint([35.30679876645213, -80.73623439122146]):
-            self.get_logger().info('Reached waypoint')
-            self.current_waypoint += 1
-
-        if self.go2waypoint([35.30674267884529, -80.73600329951549]):
-            self.get_logger().info('Reached waypoint')
-            self.current_waypoint += 1
+        for i in range(len(self.waypoints)):
+            self.current_waypoint.data = i+1
+            self.get_logger().info(f'Visiting waypoint {i+1}')
+            if self.go2waypoint([self.waypoints[i][1], self.waypoints[i][0]]):
+                self.get_logger().info(f'Reached waypoint {i+1}')
 
         if self.arm(False):
             self.get_logger().info('Disarmed')
 
-        rclpy.shutdown()
+        self.get_logger().info('Mission complete')
 
 
 def main(args=None):
@@ -83,17 +79,13 @@ def main(args=None):
 
     try:
         mission_planner = IPPMissionPlanner()
-
-        executor = MultiThreadedExecutor()
-        executor.add_node(mission_planner)
-        executor.create_task(mission_planner.mission)
-        executor.spin()
-
+        rclpy.spin_once(mission_planner)
     except KeyboardInterrupt:
         pass
     except ExternalShutdownException:
-        rclpy.shutdown()
+        mission_planner.destroy_node()
     
+
 if __name__ == '__main__':
     try:
         main()

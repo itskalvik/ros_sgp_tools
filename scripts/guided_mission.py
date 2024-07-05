@@ -16,6 +16,7 @@ class MissionPlanner(Node):
 
     def __init__(self):
         super().__init__('MissionPlanner')
+        self.get_logger().info('Initializing')
 
         # Create QoS profiles
         # STATE_QOS used for state topics, like ~/state, ~/mission/waypoints etc.
@@ -58,10 +59,7 @@ class MissionPlanner(Node):
         # Wait to get the state of the vehicle
         rclpy.spin_once(self, timeout_sec=5.0)
 
-        # Start mission
-        self.mission()
-
-    def at_waypoint(self, waypoint, tolerance=0.000005):
+    def at_waypoint(self, waypoint, tolerance=0.000007):
         """Check if the vehicle is at the waypoint."""
         dist = np.linalg.norm(self.vehicle_position - np.array(waypoint))
         if dist < tolerance:
@@ -190,12 +188,12 @@ def main(args=None):
     try:
         mission_planner = MissionPlanner()
         rclpy.spin_once(mission_planner)
+        mission_planner.mission()
     except KeyboardInterrupt:
         pass
     except ExternalShutdownException:
         mission_planner.destroy_node()
-        rclpy.shutdown()
-    
+
 
 if __name__ == '__main__':
     try:

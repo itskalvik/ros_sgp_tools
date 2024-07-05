@@ -21,7 +21,7 @@ def generate_launch_description():
 
         Node(
             package='ros_sgp_tools',
-            executable='path_planner.py',
-            name='path_planner'
+            executable='ipp_mission.py',
+            name='ipp_mission'
         )
     ])

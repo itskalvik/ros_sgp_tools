@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+import folium
+from sklearn.preprocessing import StandardScaler
 
 import gpflow
 import numpy as np
@@ -6,9 +8,7 @@ from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
-import tensorflow as tf
 
-from ros_sgp_tools.msg import IPPData
 from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
 
@@ -31,45 +31,32 @@ class offlineIPP(Node):
         X_train (np.ndarray): The training data for the IPP model, 
                               used to approximate the bounds of the environment.
         num_waypoints (int): The number of waypoints/inducing points for the IPP model.
-        num_param_inducing (int): The number of inducing points for the OSGPR model.
         num_robots (int): The number of robots
     """
     def __init__(self, X_train):
-        super().__init__('offline_ipp')
-
-        # Setup the ROS node
-        self.get_logger().info('Initializing offline IPP mission')
+        super().__init__('OfflineIPP')
+        self.get_logger().info('Initializing')
 
         self.X_train = np.array(X_train).reshape(-1, 2)
+        self.X_scaler = StandardScaler()
+        self.X_train = self.X_scaler.fit_transform(self.X_train)*10.0
 
-        self.declare_parameter('num_waypoints', 0)
-        self.declare_parameter('num_robots', 0)
+        # Declare parameters
+        self.declare_parameter('num_waypoints', 10)
+        self.declare_parameter('num_robots', 1)
 
-        # Grabs the number of waypoints
-        if self.has_parameter('num_waypoints'):
-            num_waypoints=self.get_parameter('num_waypoints').get_parameter_value().integer_value
-        else:
-            num_waypoints=10
+        self.num_waypoints=self.get_parameter('num_waypoints').get_parameter_value().integer_value
+        self.get_logger().info(f'Num Waypoints: {self.num_waypoints}')
 
-        self.get_logger().info('waypoints: %d' % num_waypoints)
-
-        # Grabs the number of robots
-        if self.has_parameter('num_robots'):
-            num_robots=self.get_parameter('num_robots').get_parameter_value().integer_value
-        else:
-            num_robots=1
-
-        self.get_logger().info('robots: %d' % num_robots)
-
-        self.num_waypoints = num_waypoints
-        self.num_robots = num_robots
+        self.num_robots=self.get_parameter('num_robots').get_parameter_value().integer_value
+        self.get_logger().info(f'Num Robots: {self.num_robots}')
 
         # Get initial solution paths
         self.compute_init_paths()
 
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
-        self.get_logger().info('OfflineIPP: Initial waypoints synced with the trajectory planner')
+        self.get_logger().info('Initial waypoints synced with the online planner')
         self.get_logger().info('Shutting down offline IPP node')
 
     def compute_init_paths(self):
@@ -79,8 +66,8 @@ class offlineIPP(Node):
                                     lengthscales=1.0)
 
         # Get the initial IPP solution
-        transformer = IPPTransform(n_dim=2, 
-                                     num_robots=self.num_robots)
+        transform = IPPTransform(n_dim=2, 
+                                 num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
 
@@ -94,7 +81,7 @@ class offlineIPP(Node):
                                       self.X_train,
                                       likelihood_variance,
                                       kernel,
-                                      transformer,
+                                      transform,
                                       Xu_init=Xu_init)
 
         # Generate new paths from optimized waypoints
@@ -103,7 +90,7 @@ class offlineIPP(Node):
 
         # Print path lengths
         self.get_logger().info('OfflineIPP: Initial IPP solution found') 
-        path_lengths = transformer.distance(np.concatenate(self.waypoints, axis=0)).numpy()
+        path_lengths = transform.distance(np.concatenate(self.waypoints, axis=0)).numpy()
         msg = 'Initial path lengths: '
         for path_length in path_lengths:
             msg += f'{path_length:.2f} '
@@ -142,13 +129,22 @@ class offlineIPP(Node):
     Log generated paths and training sets
     '''
     def plot_paths(self):
+        '''
         plt.figure()
         for i, path in enumerate(self.waypoints):
             plt.plot(path[:, 0], path[:, 1], 
                      label='Path', zorder=0, marker='o')
             plt.scatter(self.data[i][:, 0], self.data[i][:, 1],
                         s=1, label='Candidates', zorder=1)
-        plt.savefig('/tmp/OfflineIPP.png')
+        '''
+        itineraire = [(x.tolist()) for x in self.X_scaler.inverse_transform(self.waypoints.reshape(-1, 2)/10.0)]
+        map = folium.Map((itineraire[0][1], itineraire[0][0]), 
+                         zoom_start=50)
+        for pt in itineraire:
+            marker = folium.Marker([pt[1], pt[0]]) #latitude,longitude
+            map.add_child(marker) 
+
+        map.save('/tmp/OfflineIPP.html')
 
     '''
     Send the new waypoints to the trajectory planner and 
@@ -156,18 +152,21 @@ class offlineIPP(Node):
     '''
     def sync_waypoints(self):
         for robot_idx in range(self.num_robots):
-            service = f'/tb3_{robot_idx}/offlineIPP'
+            service = f'robot_{robot_idx}/offlineIPP'
             offline_ipp_service = self.create_client(IPP, service)
             request = IPP.Request()
 
             try:
                 while not offline_ipp_service.wait_for_service(timeout_sec=1.0):
-                    self.get_logger().info('service not avaliable, waiting...')
+                    self.get_logger().info(f'{service} service not avaliable, waiting...')
 
-                for waypoint in self.waypoints[robot_idx]:
+                waypoints = self.waypoints[robot_idx]
+                for waypoint in waypoints:
                     request.data.waypoints.append(Point(x=waypoint[0],
                                                         y=waypoint[1]))
-                for point in self.data[robot_idx]:
+                    
+                train_pts = self.data[robot_idx]
+                for point in train_pts:
                     request.data.x_train.append(Point(x=point[0],
                                                       y=point[1]))
                 future = offline_ipp_service.call_async(request)
@@ -185,12 +184,10 @@ if __name__ == '__main__':
     rclpy.init()
     
     # Define the extent of the environment
-    xx = np.linspace(-1.5, 1.5, 25)
-    yy = np.linspace(-1.5, 1.5, 25)
+    xx = np.linspace(-80.73595662137639, -80.73622611393395, 50)
+    yy = np.linspace(35.30684640691298, 35.306729637839894, 50)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
     # Start the offline IPP mission
     node = offlineIPP(X_train)
-
-
     

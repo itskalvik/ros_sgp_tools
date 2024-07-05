@@ -1,3 +1,3 @@
 ros_sgp_tools/WaypointsList waypoints
 ---
-int64 current_waypoint
+bool success
