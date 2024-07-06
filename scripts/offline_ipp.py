@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-import folium
+#import folium
 from sklearn.preprocessing import StandardScaler
 
 import gpflow
@@ -129,13 +129,13 @@ class offlineIPP(Node):
     Log generated paths and training sets
     '''
     def plot_paths(self):
-        '''
         plt.figure()
         for i, path in enumerate(self.waypoints):
             plt.plot(path[:, 0], path[:, 1], 
                      label='Path', zorder=0, marker='o')
             plt.scatter(self.data[i][:, 0], self.data[i][:, 1],
                         s=1, label='Candidates', zorder=1)
+        plt.savefig(f'/tmp/OfflineIPP.png')
         '''
         itineraire = [(x.tolist()) for x in self.X_scaler.inverse_transform(self.waypoints.reshape(-1, 2)/10.0)]
         map = folium.Map((itineraire[0][1], itineraire[0][0]), 
@@ -145,6 +145,7 @@ class offlineIPP(Node):
             map.add_child(marker) 
 
         map.save('/tmp/OfflineIPP.html')
+        '''
 
     '''
     Send the new waypoints to the trajectory planner and 

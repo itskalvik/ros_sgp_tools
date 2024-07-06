@@ -121,8 +121,8 @@ class OnlineIPP(Node):
     def init_sgp_models(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(variance=1.0, 
-                                    lengthscales=1.0)
+        kernel = gpflow.kernels.RBF(variance=10.0, 
+                                    lengthscales=10.0)
         # Initilize SGP for IPP with path received from offline IPP node
         self.transform = IPPTransform(n_dim=2,
                                       num_robots=1)
@@ -136,8 +136,8 @@ class OnlineIPP(Node):
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_train, 
                                       num_inducing=40, 
-                                      lengthscales=1.0, 
-                                      variance=1.0, 
+                                      lengthscales=10.0, 
+                                      variance=10.0, 
                                       noise_variance=1e-4)
 
     '''
@@ -225,7 +225,7 @@ class OnlineIPP(Node):
                               self.param_model.kernel)
         optimize_model(self.IPP_model, max_steps=100, 
                        kernel_grad=False, 
-                       lr=1e-4, 
+                       lr=1e-2, 
                        optimizer='adam')
 
         self.waypoints = self.IPP_model.inducing_variable.Z
