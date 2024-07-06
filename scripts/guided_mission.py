@@ -29,22 +29,22 @@ class MissionPlanner(Node):
 
         # Create subscribers
         self.vehicle_state_subscriber = self.create_subscription(
-            State, '/mavros/state', self.vehicle_state_callback, STATE_QOS)
+            State, 'mavros/state', self.vehicle_state_callback, STATE_QOS)
         self.vehicle_pose_subscriber = self.create_subscription(
-            NavSatFix, '/mavros/global_position/global', 
+            NavSatFix, 'mavros/global_position/global', 
             self.vehicle_position_callback, SENSOR_QOS)
         
         # Create publishers
         self.setpoint_position_publisher = self.create_publisher(
-            GeoPoseStamped, '/mavros/setpoint_position/global', SENSOR_QOS)
+            GeoPoseStamped, 'mavros/setpoint_position/global', SENSOR_QOS)
 
         # Create service clients
-        self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
+        self.set_mode_client = self.create_client(SetMode, 'mavros/set_mode')
         while not self.set_mode_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Set mode service not available, waiting again...')
         self.get_logger().info('Set mode service available')
 
-        self.arm_client = self.create_client(CommandBool, '/mavros/cmd/arming')
+        self.arm_client = self.create_client(CommandBool, 'mavros/cmd/arming')
         while not self.arm_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Arming service not available, waiting again...')
         self.get_logger().info('Arming service available')

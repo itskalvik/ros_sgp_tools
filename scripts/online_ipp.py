@@ -38,9 +38,6 @@ class OnlineIPP(Node):
         super().__init__('OnlineIPP')
         self.get_logger().info('Initializing')
 
-        # Setup the ROS node
-        self.ns = self.get_namespace()
-
         qos_profile = QoSProfile(depth=10)  
         
         # setup variables
@@ -60,7 +57,7 @@ class OnlineIPP(Node):
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 
-                                       'robot_0/offlineIPP', 
+                                       'offlineIPP', 
                                        self.offlineIPP_service_callback)
         
         # Wait to get the waypoints from the offline IPP planner
@@ -80,7 +77,7 @@ class OnlineIPP(Node):
 
         # Setup the subscribers
         self.vehicle_pose_subscriber = self.create_subscription(NavSatFix, 
-                                            '/mavros/global_position/global', 
+                                            'mavros/global_position/global', 
                                             self.data_callback, 
                                             rclpy.qos.qos_profile_sensor_data)
 

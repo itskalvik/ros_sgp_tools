@@ -1,6 +1,10 @@
+import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import ExecuteProcess
+from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
+from launch.actions import GroupAction, IncludeLaunchDescription
+from launch_ros.actions import PushRosNamespace
+from ament_index_python import get_package_share_directory
 
 
 def generate_launch_description():
@@ -18,18 +22,27 @@ def generate_launch_description():
         Node(
             package='ros_sgp_tools',
             executable='online_ipp.py',
+            namespace='robot_0',
             name='online_ipp'
         ),
 
         Node(
             package='ros_sgp_tools',
             executable='ipp_mission.py',
+            namespace='robot_0',
             name='ipp_mission'
         ),
 
-        ExecuteProcess(
-            cmd=[['ros2 launch ros_sgp_tools mavros.launch']],
-            shell=True,
-            output='both'
+        GroupAction(
+            actions=[
+                # push_ros_namespace to set namespace of included nodes
+                PushRosNamespace('robot_0'),
+                IncludeLaunchDescription(
+                    XMLLaunchDescriptionSource(
+                        os.path.join(
+                            get_package_share_directory('ros_sgp_tools'),
+                            'launch/mavros.launch'))
+                ),
+            ]
         )
     ])
