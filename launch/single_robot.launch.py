@@ -28,6 +28,13 @@ def generate_launch_description():
 
         Node(
             package='ros_sgp_tools',
+            executable='depth_publisher.py',
+            namespace='robot_0',
+            name='depth_publisher'
+        ),
+
+        Node(
+            package='ros_sgp_tools',
             executable='ipp_mission.py',
             namespace='robot_0',
             name='ipp_mission'

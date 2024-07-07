@@ -42,6 +42,7 @@ install(PROGRAMS
   scripts/online_ipp.py
   scripts/ipp_mission.py
   scripts/guided_mission.py
+  scripts/depth_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

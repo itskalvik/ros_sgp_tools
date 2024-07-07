@@ -7,14 +7,14 @@ from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
 from sklearn.preprocessing import StandardScaler
 
-from sensor_msgs.msg import NavSatFix
-
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
+from sensor_msgs.msg import NavSatFix, Range
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 
 class OnlineIPP(Node):
@@ -76,15 +76,20 @@ class OnlineIPP(Node):
         self.get_logger().info('Initial waypoints synced with the mission planner')
 
         # Setup the subscribers
-        self.vehicle_pose_subscriber = self.create_subscription(NavSatFix, 
-                                            'mavros/global_position/global', 
-                                            self.data_callback, 
-                                            rclpy.qos.qos_profile_sensor_data)
-
         self.create_subscription(Int32, 
                                  'current_waypoint', 
                                  self.current_waypoint_callback, 
                                  qos_profile)
+
+        self.position_sub = Subscriber(self, NavSatFix, 
+                                       "mavros/global_position/global",
+                                       qos_profile=rclpy.qos.qos_profile_sensor_data)
+        self.depth_sub = Subscriber(self, Range, 
+                                    "mavros/rangefinder/rangefinder",
+                                    qos_profile=rclpy.qos.qos_profile_sensor_data)
+        self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.depth_sub],
+                                                     queue_size=10, slop=0.05)
+        self.time_sync.registerCallback(self.data_callback)
 
         # Setup the timer to update the parameters and waypoints
         self.timer = self.create_timer(5.0, self.update_with_data)
@@ -149,13 +154,13 @@ class OnlineIPP(Node):
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
 
-    def data_callback(self, msg):
+    def data_callback(self, position_msg, depth_msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 0 and self.current_waypoint != self.num_waypoints:
             
             # Append the new data to the buffers
-            self.data_X.append([msg.latitude, msg.longitude])
-            self.data_y.append(msg.altitude)
+            self.data_X.append([position_msg.latitude, position_msg.longitude])
+            self.data_y.append(depth_msg.range)
 
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
