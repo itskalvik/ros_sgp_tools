@@ -189,6 +189,10 @@ if __name__ == '__main__':
     yy = np.linspace(35.30684640691298, 35.306729637839894, 50)
     X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
 
+    # Load candidates for lake
+    fname = 'ros2_ws/src/ros_sgp_tools/scripts/candidates.csv'
+    X_train = np.genfromtxt(fname, delimiter=',')
+
     # Start the offline IPP mission
     node = offlineIPP(X_train)
     

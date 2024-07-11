@@ -49,10 +49,6 @@ def generate_launch_description():
                         os.path.join(
                             get_package_share_directory('ros_sgp_tools'),
                             'launch/mavros.launch')),
-                    launch_arguments={
-                        'fcu_url': 'udp://0.0.0.0:14551@',
-                        'pluginlists_yaml': '$(find-pkg-share ros_sgp_tools)/launch/apm_pluginlists.yaml',
-                    }.items()
                 ),
             ]
         )
