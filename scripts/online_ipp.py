@@ -85,7 +85,7 @@ class OnlineIPP(Node):
                                        "mavros/global_position/global",
                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
         self.depth_sub = Subscriber(self, Range, 
-                                    "mavros/rangefinder/rangefinder",
+                                    "mavros/rangefinder_pub",
                                     qos_profile=rclpy.qos.qos_profile_sensor_data)
         self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.depth_sub],
                                                      queue_size=10, slop=0.05)
