@@ -10,5 +10,6 @@
       - 'distance_sensor'
       - 'global_position'
       - 'imu'
+      - 'command'
       - 'local_position'
 
