@@ -74,7 +74,7 @@ class offlineIPP(Node):
         Xu_init, _ = run_tsp(Xu_init, 
                              num_vehicles=self.num_robots,
                              resample=self.num_waypoints)
-        Xu_init = Xu_init.reshape(-1, 2)
+        Xu_init = np.array(Xu_init).reshape(-1, 2)
 
         # Optimize the SGP
         IPP_model, _ = continuous_sgp(self.num_waypoints, 
