@@ -156,7 +156,7 @@ class OnlineIPP(Node):
 
     def data_callback(self, position_msg, depth_msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
-        if self.current_waypoint > 0 and self.current_waypoint != self.num_waypoints:
+        if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
             
             # Append the new data to the buffers
             self.data_X.append([position_msg.latitude, position_msg.longitude])
