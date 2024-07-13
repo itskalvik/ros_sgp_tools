@@ -1,4 +1,4 @@
-/mavros/**:
+'*/mavros/**':
   ros__parameters:
     plugin_denylist:
       # common
@@ -12,4 +12,3 @@
       - 'imu'
       - 'command'
       - 'local_position'
-
