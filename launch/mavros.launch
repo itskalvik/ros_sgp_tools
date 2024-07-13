@@ -8,7 +8,7 @@
 	<arg name="respawn_mavros" default="false" />
 	<arg name="namespace" default="mavros"/>
 	<arg name="pluginlists_yaml" default="$(find-pkg-share ros_sgp_tools)/launch/apm_pluginlists.yaml" />
-	<arg name="config_yaml" default="$(find-pkg-share mavros)/launch/apm_config.yaml" />
+	<arg name="config_yaml" default="$(find-pkg-share ros_sgp_tools)/launch/apm_config.yaml" />
 	<include file="$(find-pkg-share mavros)/launch/node.launch">
 		<arg name="pluginlists_yaml" value="$(var pluginlists_yaml)" />
 		<arg name="config_yaml" value="$(var config_yaml)" />
