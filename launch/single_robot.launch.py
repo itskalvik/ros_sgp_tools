@@ -55,7 +55,6 @@ def generate_launch_description():
                         ])
                     ]),
                     launch_arguments={
-                        'fcu_url': 'udp://0.0.0.0:14550@'
                     }.items()
                 )
             ]
