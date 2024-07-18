@@ -92,10 +92,11 @@ class MissionPlanner(Node):
                 rclpy.spin_once(self, timeout_sec=1.0)
                 continue
 
-            self.arm_client.call_async(self.arm_request)
-            last_request = self.get_clock().now().to_msg().sec
+            future = self.arm_client.call_async(self.arm_request)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
 
-            # Timeout
+            # Timeout for retry
+            last_request = self.get_clock().now().to_msg().sec
             if self.vehicle_state.armed != state and \
                 last_request - start_time > timeout:
                
@@ -116,10 +117,11 @@ class MissionPlanner(Node):
                 rclpy.spin_once(self, timeout_sec=1.0)
                 continue
 
-            self.set_mode_client.call_async(self.set_mode_request)
-            last_request = self.get_clock().now().to_msg().sec
+            future = self.set_mode_client.call_async(self.set_mode_request)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
 
-            # Timeout
+            # Timeout for retry
+            last_request = self.get_clock().now().to_msg().sec
             if self.vehicle_state.mode != mode and \
                 last_request - start_time > timeout:
                

@@ -1,13 +1,10 @@
 #! /usr/bin/env python3
 
+from guided_mission import MissionPlanner
 from ros_sgp_tools.srv import Waypoints
 from std_msgs.msg import Int32
-
 import rclpy
 
-from guided_mission import MissionPlanner
-import matplotlib.pyplot as plt
-import numpy as np
 
 class IPPMissionPlanner(MissionPlanner):
 
@@ -37,19 +34,12 @@ class IPPMissionPlanner(MissionPlanner):
         # Start visiting the waypoints
         self.mission()
 
-    def plot_paths(self):
-        plt.figure()
-        path = np.array(self.waypoints)
-        plt.plot(path[:, 0], path[:, 1], label='Path', marker='o')
-        plt.savefig(f'IPPMission-{self.current_waypoint.data}.png')
-
     def waypoint_service_callback(self, request, response):
         waypoints = request.waypoints.waypoints
 
         self.waypoints = []
         for i in range(len(waypoints)):
             self.waypoints.append([waypoints[i].x, waypoints[i].y])
-        self.plot_paths()
         self.get_logger().info('Waypoints received')
         response.success = True
         return response
@@ -82,7 +72,6 @@ class IPPMissionPlanner(MissionPlanner):
 
 def main(args=None):
     rclpy.init(args=args)
-
     mission_planner = IPPMissionPlanner()
     rclpy.spin_once(mission_planner)
 

@@ -12,7 +12,7 @@ class DepthPublisher(Node):
         super().__init__('depth_publisher')
         # Setup the depth publisher
         self.depth_publisher = self.create_publisher(Range, 
-                                'mavros/rangefinder/rangefinder', 
+                                'mavros/rangefinder_pub', 
                                 10)
         self.depth_msg = Range()
 

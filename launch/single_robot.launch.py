@@ -9,6 +9,11 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
     namespace = 'robot_0'
+    num_robots = 1
+    num_waypoints = 10
+    geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
+                                          'launch',
+                                          'woodward.plan'])
     
     return LaunchDescription([
         Node(
@@ -16,8 +21,10 @@ def generate_launch_description():
             executable='offline_ipp.py',
             name='offline_ipp',
             parameters=[
-                {'num_waypoints': 10},
-                {'num_robots': 1}
+                {'num_waypoints': num_waypoints,
+                 'num_robots': num_robots,
+                 'geofence_plan': geofence_plan
+                }
             ]
         ),
         
@@ -25,7 +32,13 @@ def generate_launch_description():
             package='ros_sgp_tools',
             executable='online_ipp.py',
             namespace=namespace,
-            name='online_ipp'
+            name='online_ipp',
+            parameters=[
+                {'num_waypoints': num_waypoints,
+                 'num_robots': num_robots,
+                 'geofence_plan': geofence_plan
+                }
+            ]
         ),
 
         Node(

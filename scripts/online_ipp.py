@@ -1,5 +1,10 @@
 #! /usr/bin/env python3
 
+import os
+from utils import plan2data
+import matplotlib.pyplot as plt
+from ament_index_python.packages import get_package_share_directory
+
 import gpflow
 import numpy as np
 from sgptools.models.continuous_sgp import *
@@ -31,10 +36,7 @@ class OnlineIPP(Node):
         num_param_inducing (int): The number of inducing points for the OSGPR model.
         buffer_size (int): The size of the buffers to store the sensor data.
     """
-    def __init__(self, 
-                 X_train,
-                 num_param_inducing=40,
-                 buffer_size=100):
+    def __init__(self):
         super().__init__('OnlineIPP')
         self.get_logger().info('Initializing')
 
@@ -42,18 +44,33 @@ class OnlineIPP(Node):
         
         # setup variables
         self.waypoints = None
-        self.num_param_inducing = num_param_inducing
         self.data_X = []
         self.data_y = []
-        self.buffer_size = buffer_size
         self.current_waypoint = -1
+        self.data_counter = 0
 
+        # Declare parameters
+        self.declare_parameter('num_param_inducing', 40)
+        self.num_param_inducing = self.get_parameter('num_param_inducing').get_parameter_value().integer_value
+        self.get_logger().info(f'Num Param Inducing: {self.num_param_inducing}')
+
+        self.declare_parameter('buffer_size', 100)
+        self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
+        self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
+
+        plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
+                                                              'launch', 
+                                                              'sample.plan')
+        self.declare_parameter('geofence_plan', plan_fname)
+        plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
+        self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
+
+        # Get the data and normalize 
+        X_train, home_position = plan2data(plan_fname, num_samples=5000)
         self.X_train = np.array(X_train).reshape(-1, 2)
-
-        # Normalize coordinates to stabilize the gradients
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(self.X_train)*10.0
-        self.y_scaler = None
+        self.home_position = home_position
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 
@@ -84,10 +101,10 @@ class OnlineIPP(Node):
         self.position_sub = Subscriber(self, NavSatFix, 
                                        "mavros/global_position/global",
                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
-        self.depth_sub = Subscriber(self, Range, 
+        self.data_sub = Subscriber(self, Range, 
                                     "mavros/rangefinder_pub",
                                     qos_profile=rclpy.qos.qos_profile_sensor_data)
-        self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.depth_sub],
+        self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.data_sub],
                                                      queue_size=10, slop=0.05)
         self.time_sync.registerCallback(self.data_callback)
 
@@ -103,7 +120,6 @@ class OnlineIPP(Node):
         WaypointsResponse: Response containing the success flag
     '''
     def offlineIPP_service_callback(self, request, response):
-
         data = request.data.waypoints
 
         self.waypoints = []
@@ -123,8 +139,8 @@ class OnlineIPP(Node):
     def init_sgp_models(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(variance=10.0, 
-                                    lengthscales=10.0)
+        kernel = gpflow.kernels.RBF(variance=1.0, 
+                                    lengthscales=0.5)
         # Initilize SGP for IPP with path received from offline IPP node
         self.transform = IPPTransform(n_dim=2,
                                       num_robots=1)
@@ -138,8 +154,8 @@ class OnlineIPP(Node):
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_train, 
                                       num_inducing=40, 
-                                      lengthscales=10.0, 
-                                      variance=10.0, 
+                                      lengthscales=0.5, 
+                                      variance=1.0, 
                                       noise_variance=1e-4)
 
     '''
@@ -154,13 +170,11 @@ class OnlineIPP(Node):
             self.update_with_data(force_update=True)
         self.current_waypoint = msg.data
 
-    def data_callback(self, position_msg, depth_msg):
+    def data_callback(self, position_msg, data_msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
-            
-            # Append the new data to the buffers
             self.data_X.append([position_msg.latitude, position_msg.longitude])
-            self.data_y.append(depth_msg.range)
+            self.data_y.append(data_msg.range)
 
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
@@ -175,6 +189,7 @@ class OnlineIPP(Node):
 
         # Undo data normalization to map the coordinates to real world coordinates
         waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints)/10.0)
+        self.plot_paths(waypoints)
         for waypoint in waypoints:
             request.waypoints.waypoints.append(Point(x=waypoint[0],
                                                      y=waypoint[1]))
@@ -183,6 +198,13 @@ class OnlineIPP(Node):
         while future.result() is not None:
             rclpy.spin_once(self, timeout_sec=0.5)
 
+    def plot_paths(self, waypoints):
+        plt.figure()
+        path = np.array(waypoints)
+        plt.plot(path[:, 0], path[:, 1], label='Path', marker='o')
+        plt.savefig(f'IPPMission-({self.current_waypoint}).png')
+        np.savetxt(f'IPPMission-({self.current_waypoint}).csv', path)
+
     def update_with_data(self, force_update=False):
         # Update the parameters and waypoints if the buffer is full and 
         # empty the buffer after updating 
@@ -190,16 +212,24 @@ class OnlineIPP(Node):
         if len(self.data_X) > self.buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
-            # Make local copies of the data and normalize x locations
+            # Make local copies of the data
             data_X = np.array(self.data_X).reshape(-1, 2)
+            data_y = np.array(self.data_y).reshape(-1, 1)
+
+            # Save data
+            np.savetxt(f'data-{self.data_counter}.csv', np.hstack([data_X, data_y]))
+
+            # Normalize X locations
             data_X = self.X_scaler.transform(data_X)*10.0
 
-            data_y = np.array(self.data_y).reshape(-1, 1)
+            '''
+            # Use only first batch to compute mean and std
             if self.y_scaler is None:
                 self.y_scaler = StandardScaler()
                 data_y = self.y_scaler.fit_transform(data_y)
             else:
                 data_y = self.y_scaler.transform(data_y)
+            '''
 
             # Empty global data buffers
             self.data_X = []
@@ -225,9 +255,10 @@ class OnlineIPP(Node):
         # Get the new inducing points for the path
         self.IPP_model.update(self.param_model.likelihood.variance,
                               self.param_model.kernel)
-        optimize_model(self.IPP_model, max_steps=100, 
+        optimize_model(self.IPP_model, 
                        kernel_grad=False, 
-                       lr=1e-2, 
+                       max_steps=5000, 
+                       lr=1e-1, 
                        optimizer='adam')
 
         self.waypoints = self.IPP_model.inducing_variable.Z
@@ -241,23 +272,8 @@ class OnlineIPP(Node):
         self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy()}')
 
 
-def main():
+if __name__ == '__main__':
     # Start the online IPP mission
     rclpy.init()
-
-    # Define the extent of the environment
-    xx = np.linspace(-80.73595662137639, -80.73622611393395, 50)
-    yy = np.linspace(35.30684640691298, 35.306729637839894, 50)
-    X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
-
-    # Load candidates for lake
-    fname = 'ros2_ws/src/ros_sgp_tools/scripts/candidates.csv'
-    X_train = np.genfromtxt(fname, delimiter=',')
-
-    # Start the online IPP mission
-    online_ipp = OnlineIPP(X_train)
+    online_ipp = OnlineIPP()
     rclpy.spin(online_ipp)
-
-
-if __name__ == '__main__':
-    main()

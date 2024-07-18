@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
-#import folium
-from sklearn.preprocessing import StandardScaler
+
+import os
+from utils import plan2data
+from ament_index_python.packages import get_package_share_directory
 
 import gpflow
 import numpy as np
@@ -8,6 +10,7 @@ from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
 
 from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
@@ -26,30 +29,33 @@ class offlineIPP(Node):
     Note: Make sure the number of waypoints is small enough so that 
     the parameters update and waypoints updates are fast enough to 
     reach the robot before it reaches the next waypoint.
-
-    Args:
-        X_train (np.ndarray): The training data for the IPP model, 
-                              used to approximate the bounds of the environment.
-        num_waypoints (int): The number of waypoints/inducing points for the IPP model.
-        num_robots (int): The number of robots
     """
-    def __init__(self, X_train):
+    def __init__(self):
         super().__init__('OfflineIPP')
         self.get_logger().info('Initializing')
 
+        # Declare parameters
+        self.declare_parameter('num_waypoints', 10)
+        self.num_waypoints = self.get_parameter('num_waypoints').get_parameter_value().integer_value
+        self.get_logger().info(f'Num Waypoints: {self.num_waypoints}')
+
+        self.declare_parameter('num_robots', 1)
+        self.num_robots = self.get_parameter('num_robots').get_parameter_value().integer_value
+        self.get_logger().info(f'Num Robots: {self.num_robots}')
+
+        plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
+                                                              'launch', 
+                                                              'sample.plan')
+        self.declare_parameter('geofence_plan', plan_fname)
+        plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
+        self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
+
+        # Get the data and normalize 
+        X_train, home_position = plan2data(plan_fname, num_samples=5000)
         self.X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(self.X_train)*10.0
-
-        # Declare parameters
-        self.declare_parameter('num_waypoints', 10)
-        self.declare_parameter('num_robots', 1)
-
-        self.num_waypoints=self.get_parameter('num_waypoints').get_parameter_value().integer_value
-        self.get_logger().info(f'Num Waypoints: {self.num_waypoints}')
-
-        self.num_robots=self.get_parameter('num_robots').get_parameter_value().integer_value
-        self.get_logger().info(f'Num Robots: {self.num_robots}')
+        self.home_position = home_position
 
         # Get initial solution paths
         self.compute_init_paths()
@@ -63,7 +69,7 @@ class offlineIPP(Node):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
         kernel = gpflow.kernels.RBF(variance=1.0, 
-                                    lengthscales=1.0)
+                                    lengthscales=0.5)
 
         # Get the initial IPP solution
         transform = IPPTransform(n_dim=2, 
@@ -135,17 +141,8 @@ class offlineIPP(Node):
                      label='Path', zorder=0, marker='o')
             plt.scatter(self.data[i][:, 0], self.data[i][:, 1],
                         s=1, label='Candidates', zorder=1)
-        plt.savefig(f'/tmp/OfflineIPP.png')
-        '''
-        itineraire = [(x.tolist()) for x in self.X_scaler.inverse_transform(self.waypoints.reshape(-1, 2)/10.0)]
-        map = folium.Map((itineraire[0][1], itineraire[0][0]), 
-                         zoom_start=50)
-        for pt in itineraire:
-            marker = folium.Marker([pt[1], pt[0]]) #latitude,longitude
-            map.add_child(marker) 
-
-        map.save('/tmp/OfflineIPP.html')
-        '''
+            np.savetxt(f'OfflineIPP-{i}.csv', path, delimiter=',')
+        plt.savefig(f'OfflineIPP.png')
 
     '''
     Send the new waypoints to the trajectory planner and 
@@ -181,18 +178,7 @@ class offlineIPP(Node):
 
 
 if __name__ == '__main__':
-
-    rclpy.init()
-    
-    # Define the extent of the environment
-    xx = np.linspace(-80.73595662137639, -80.73622611393395, 50)
-    yy = np.linspace(35.30684640691298, 35.306729637839894, 50)
-    X_train = np.array(np.meshgrid(xx, yy)).T.reshape(-1, 2)
-
-    # Load candidates for lake
-    fname = 'ros2_ws/src/ros_sgp_tools/scripts/candidates.csv'
-    X_train = np.genfromtxt(fname, delimiter=',')
-
     # Start the offline IPP mission
-    node = offlineIPP(X_train)
+    rclpy.init()
+    node = offlineIPP()
     
