@@ -54,7 +54,7 @@ class offlineIPP(Node):
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
         self.X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(self.X_train)*10.0
+        self.X_train = self.X_scaler.fit_transform(self.X_train)
         self.home_position = home_position
 
         # Get initial solution paths
@@ -68,8 +68,7 @@ class offlineIPP(Node):
     def compute_init_paths(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(variance=1.0, 
-                                    lengthscales=0.5)
+        kernel = gpflow.kernels.RBF(lengthscales=0.1, variance=0.1)
 
         # Get the initial IPP solution
         transform = IPPTransform(n_dim=2, 
@@ -88,7 +87,9 @@ class offlineIPP(Node):
                                       likelihood_variance,
                                       kernel,
                                       transform,
-                                      Xu_init=Xu_init)
+                                      Xu_init=Xu_init,
+                                      max_steps=5000, 
+                                      lr=1e-4)
 
         # Generate new paths from optimized waypoints
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
