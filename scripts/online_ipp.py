@@ -142,7 +142,7 @@ class OnlineIPP(Node):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
         lengthscales = 0.1
-        variance = 0.1
+        variance = 0.5
 
         # Initilize SGP for IPP with path received from offline IPP node
         kernel = gpflow.kernels.RBF(lengthscales=lengthscales, 
@@ -218,7 +218,7 @@ class OnlineIPP(Node):
         if len(self.data_X) > self.buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
-            self.get_logger().info('Started update')
+            start_time = self.get_clock().now().to_msg().sec
 
             # Make local copies of the data
             data_X = np.array(self.data_X).reshape(-1, 2)
@@ -250,7 +250,10 @@ class OnlineIPP(Node):
 
             # Sync the waypoints with the mission planner
             self.sync_waypoints()
+
+            end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info('Updated waypoints synced with the mission planner')
+            self.get_logger().info(f'Update time: {end_time-start_time} secs')
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
@@ -275,10 +278,12 @@ class OnlineIPP(Node):
         """Update the OSGPR parameters."""
         # Get the new inducing points for the path
         self.param_model.update((X_new, y_new))
-        optimize_model(self.param_model, 
+        optimize_model(self.param_model,
+                       trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='adam',
                        lr=1e-4)
         self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy()}')
+        self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy()}')
 
 
 if __name__ == '__main__':

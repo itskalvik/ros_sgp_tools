@@ -68,7 +68,7 @@ class offlineIPP(Node):
     def compute_init_paths(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(lengthscales=0.1, variance=0.1)
+        kernel = gpflow.kernels.RBF(lengthscales=0.1, variance=0.5)
 
         # Get the initial IPP solution
         transform = IPPTransform(n_dim=2, 
