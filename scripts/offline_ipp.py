@@ -88,7 +88,6 @@ class offlineIPP(Node):
                                       kernel,
                                       transform,
                                       Xu_init=Xu_init,
-                                      max_steps=5000, 
                                       lr=1e-4)
 
         # Generate new paths from optimized waypoints

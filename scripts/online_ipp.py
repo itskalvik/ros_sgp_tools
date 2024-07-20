@@ -265,7 +265,6 @@ class OnlineIPP(Node):
                               self.param_model.kernel)
         optimize_model(self.IPP_model, 
                        kernel_grad=False, 
-                       max_steps=5000, 
                        lr=1e-4, 
                        optimizer='adam')
 
