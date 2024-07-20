@@ -69,9 +69,9 @@ class OnlineIPP(Node):
 
         # Get the data and normalize 
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
-        self.X_train = np.array(X_train).reshape(-1, 2)
+        X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(self.X_train)
+        self.X_train = self.X_scaler.fit_transform(X_train)
         self.home_position = home_position
 
         # Setup the service to receive the waypoints and X_train data
@@ -164,6 +164,7 @@ class OnlineIPP(Node):
                                       variance=variance, 
                                       noise_variance=likelihood_variance)
 
+
     '''
     Callback to get the current waypoint and shutdown the node once the mission ends
     '''
@@ -176,7 +177,7 @@ class OnlineIPP(Node):
     def data_callback(self, position_msg, data_msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
-            self.data_X.append([position_msg.latitude, position_msg.longitude])
+            self.data_X.append([position_msg.longitude, position_msg.latitude])
             self.data_y.append(data_msg.range)
 
     def sync_waypoints(self):
@@ -280,10 +281,10 @@ class OnlineIPP(Node):
         self.param_model.update((X_new, y_new))
         optimize_model(self.param_model,
                        trainable_variables=self.param_model.trainable_variables[1:], 
-                       optimizer='adam',
-                       lr=1e-4)
-        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy()}')
-        self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy()}')
+                       optimizer='scipy')
+
+        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
+        self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
 
 
 if __name__ == '__main__':
