@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 from mavros_msgs.msg import State
-from mavros_msgs.srv import SetMode, CommandBool
+from mavros_msgs.srv import SetMode, CommandBool, CommandHome
 from geographic_msgs.msg import GeoPoseStamped
 from sensor_msgs.msg import NavSatFix
 
@@ -104,7 +104,7 @@ class MissionPlanner(Node):
                 return False
 
         return True
-
+    
     def engage_mode(self, mode="GUIDED", timeout=30):
         """Set the vehicle mode"""
         self.set_mode_request.custom_mode = mode
@@ -127,6 +127,27 @@ class MissionPlanner(Node):
                
                 self.get_logger().info(f'Timeout: Failed to engage {mode} mode')
                 return False
+
+        return True
+    
+    def set_home(self, latitude, longitude, altitude=0.0, timeout=900):
+        """Set the home position"""
+
+        home_client = self.create_client(CommandHome, 'mavros/cmd/set_home')
+        while not home_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Set home service not available, waiting again...')
+        self.get_logger().info('Set home service available')
+
+        set_home_request = CommandHome.Request()
+        set_home_request.latitude = latitude
+        set_home_request.longitude = longitude
+        set_home_request.altitude = altitude
+
+        future = home_client.call_async(set_home_request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
+        if not future.result().success:
+            self.get_logger().info(f'Timeout: Failed to set home')
+            return False
 
         return True
     
@@ -170,6 +191,10 @@ class MissionPlanner(Node):
         self.get_logger().info('Arming')
         if self.arm(True):
             self.get_logger().info('Armed')
+
+        self.get_logger().info('Setting current positon as home')
+        if self.set_home(self.vehicle_position[0], self.vehicle_position[1]):
+            self.get_logger().info('Home position set')
 
         self.get_logger().info('Visiting waypoint 1')
         if self.go2waypoint([35.30684387683425, -80.7360063599907]):

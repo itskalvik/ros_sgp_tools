@@ -58,6 +58,10 @@ class IPPMissionPlanner(MissionPlanner):
         if self.arm(True):
             self.get_logger().info('Armed')
 
+        self.get_logger().info('Setting current positon as home')
+        if self.set_home(self.vehicle_position[0], self.vehicle_position[1]):
+            self.get_logger().info('Home position set')
+
         for i in range(len(self.waypoints)):
             self.current_waypoint.data = i+1
             self.get_logger().info(f'Visiting waypoint {i+1}')
