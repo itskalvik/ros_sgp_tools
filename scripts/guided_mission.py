@@ -130,7 +130,7 @@ class MissionPlanner(Node):
 
         return True
     
-    def set_home(self, latitude, longitude, altitude=0.0, timeout=900):
+    def set_home(self, latitude, longitude, altitude=None, timeout=900):
         """Set the home position"""
 
         home_client = self.create_client(CommandHome, 'mavros/cmd/set_home')
@@ -141,7 +141,8 @@ class MissionPlanner(Node):
         set_home_request = CommandHome.Request()
         set_home_request.latitude = latitude
         set_home_request.longitude = longitude
-        set_home_request.altitude = altitude
+        if altitude is not None:
+            set_home_request.altitude = altitude
 
         future = home_client.call_async(set_home_request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
