@@ -1,5 +1,8 @@
 #! /usr/bin/env python3
 
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
 import os
 from utils import plan2data
 import matplotlib.pyplot as plt
@@ -111,7 +114,9 @@ class OnlineIPP(Node):
         self.time_sync.registerCallback(self.data_callback)
 
         # Setup the timer to update the parameters and waypoints
-        self.timer = self.create_timer(5.0, self.update_with_data)
+        # Makes sure only one instance runs at a time
+        self.timer = self.create_timer(5.0, self.update_with_data,
+                                       callback_group=MutuallyExclusiveCallbackGroup())
 
     '''
     Service callback to receive the waypoints and X_train data from offlineIPP node
@@ -290,5 +295,8 @@ class OnlineIPP(Node):
 if __name__ == '__main__':
     # Start the online IPP mission
     rclpy.init()
+
     online_ipp = OnlineIPP()
-    rclpy.spin(online_ipp)
+    executor = MultiThreadedExecutor()
+    executor.add_node(online_ipp)
+    executor.spin()
