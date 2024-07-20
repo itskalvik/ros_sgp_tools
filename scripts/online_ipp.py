@@ -52,7 +52,6 @@ class OnlineIPP(Node):
         self.data_X = []
         self.data_y = []
         self.current_waypoint = -1
-        self.data_counter = 0
 
         # Declare parameters
         self.declare_parameter('num_param_inducing', 40)
@@ -229,9 +228,6 @@ class OnlineIPP(Node):
             # Make local copies of the data
             data_X = np.array(self.data_X).reshape(-1, 2)
             data_y = np.array(self.data_y).reshape(-1, 1)
-
-            # Save data
-            np.savetxt(f'data-{self.data_counter}.csv', np.hstack([data_X, data_y]))
 
             # Normalize X locations
             data_X = self.X_scaler.transform(data_X)
