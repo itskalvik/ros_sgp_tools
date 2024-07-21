@@ -15,7 +15,8 @@ def plan2data(fname, num_samples=5000):
 
     poly = geometry.Polygon(vertices)
     sampler = gpd.GeoSeries([poly])
-    candidates = sampler.sample_points(size=num_samples)
+    candidates = sampler.sample_points(size=num_samples,
+                                       rng=2024)
     candidates = candidates.get_coordinates().to_numpy()
 
     return candidates, home_position

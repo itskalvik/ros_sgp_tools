@@ -19,7 +19,10 @@ import rclpy
 from rclpy.node import Node
 
 import matplotlib.pyplot as plt
-np.random.seed(2021)
+
+import tensorflow as tf
+tf.random.set_seed(2024)
+np.random.seed(2024)
 
 
 class offlineIPP(Node):

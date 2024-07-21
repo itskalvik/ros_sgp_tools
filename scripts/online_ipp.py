@@ -24,7 +24,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
-np.random.seed(2021)
+import tensorflow as tf
+tf.random.set_seed(2024)
+np.random.seed(2024)
 
 
 class OnlineIPP(Node):
