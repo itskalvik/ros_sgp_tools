@@ -73,10 +73,18 @@ class OnlineIPP(Node):
 
         # Get the data and normalize 
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
+
         X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(X_train)
-        self.home_position = home_position
+
+        # Shift home position for each robot to avoid collision with other robots
+        robot_idx = self.get_namespace()
+        robot_idx = int(robot_idx.split('_')[-1])
+        home_position = np.array(home_position[:2])
+        home_position += np.array([3/111111, 0.0])*robot_idx
+        home_position = home_position.reshape(-1, 2)
+        self.home_position = self.X_scaler.transform(home_position)
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 
@@ -162,6 +170,7 @@ class OnlineIPP(Node):
                                            self.transform,
                                            max_steps=0,
                                            Xu_init=self.waypoints)
+        self.IPP_model.transform.update_Xu_fixed(self.home_position.reshape(1, 1, 2))
         
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_train, 

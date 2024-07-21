@@ -10,7 +10,7 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 def generate_launch_description():
     namespace = 'robot_0'
     num_robots = 1
-    num_waypoints = 20
+    num_waypoints = 22
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch',
                                           'lake.plan'])

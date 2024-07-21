@@ -55,10 +55,17 @@ class offlineIPP(Node):
 
         # Get the data and normalize 
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
+        
         self.X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(self.X_train)
-        self.home_position = home_position
+
+        # Shift home position for each robot to avoid collision with other robots
+        home_positions = []
+        for i in range(self.num_robots):
+            home_positions.append(np.array(home_position[:2]) + (np.array([3/111111, 0.0])*i))
+        home_position = np.array(home_positions).reshape(-1, 2)
+        self.home_position = self.X_scaler.transform(home_position)
 
         # Get initial solution paths
         self.compute_init_paths()
@@ -79,20 +86,32 @@ class offlineIPP(Node):
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
 
+        # Add fixed home position
+        for i in range(self.num_robots):
+            Xu_init[i] = self.home_position[i]
+
         Xu_init, _ = run_tsp(Xu_init, 
                              num_vehicles=self.num_robots,
-                             resample=self.num_waypoints)
+                             resample=self.num_waypoints,
+                             start_idx=np.arange(self.num_robots).tolist())
+        Xu_fixed = np.copy(Xu_init[:, :1, :])
         Xu_init = np.array(Xu_init).reshape(-1, 2)
 
-        # Optimize the SGP
+        # Initialize the SGP
         IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                       self.X_train,
                                       likelihood_variance,
                                       kernel,
                                       transform,
                                       Xu_init=Xu_init,
-                                      optimizer='scipy',
-                                      method='CG')
+                                      max_steps=0)
+        IPP_model.transform.update_Xu_fixed(Xu_fixed)
+
+        # Get the new inducing points for the path
+        optimize_model(IPP_model, 
+                       kernel_grad=False, 
+                       optimizer='scipy',
+                       method='CG')
 
         # Generate new paths from optimized waypoints
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
@@ -142,10 +161,13 @@ class offlineIPP(Node):
         plt.figure()
         for i, path in enumerate(self.waypoints):
             plt.plot(path[:, 1], path[:, 0], 
-                     label='Path', zorder=0, marker='o')
+                     label='Path', zorder=1, marker='o', c='r')
             plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
-                        s=1, label='Candidates', zorder=1)
+                        s=1, label='Candidates', zorder=0)
             np.savetxt(f'OfflineIPP-{i}.csv', path, delimiter=',')
+        plt.scatter(self.home_position[:, 1], self.home_position[:, 0],
+                    label='Home position', zorder=2, c='g')
+        plt.legend()
         plt.savefig(f'OfflineIPP.png')
 
     '''
