@@ -42,12 +42,10 @@ class DepthPublisher(Node):
 
         X_train = np.vstack([x, y]).T.astype(float)*1e-7
         y_train = c.reshape(-1, 1).astype(float)
-
-        self.get_logger().info(f'{X_train.shape}')
         
         self.X_scaler = StandardScaler()
         self.X_scaler.fit(X_train)
-        X_train = self.X_scaler.transform(X_train)*10.0
+        X_train = self.X_scaler.transform(X_train)
 
         # Fit kernel parameters
         _, noise_variance, kernel = get_model_params(X_train, y_train, 
@@ -60,12 +58,14 @@ class DepthPublisher(Node):
                                         kernel=kernel,
                                         noise_variance=noise_variance)
 
+        self.get_logger().info(f'GP Kernel lengthscales: {self.gpr_gt.kernel.lengthscales.numpy():.4f}')
+        self.get_logger().info(f'GP Kernel variance: {self.gpr_gt.kernel.variance.numpy():.4f}')
         self.get_logger().info("Initialized depth publisher")
 
     def data_callback(self, msg):
         self.depth_msg.header.stamp = self.get_clock().now().to_msg()
         location = np.array([[msg.latitude, msg.longitude]])
-        location = self.X_scaler.transform(location)*10.0
+        location = self.X_scaler.transform(location)
         mean, _ = self.gpr_gt.predict_f(location)
         self.depth_msg.range = mean.numpy()[0][0]
         self.depth_publisher.publish(self.depth_msg)

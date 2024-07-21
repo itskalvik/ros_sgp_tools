@@ -43,6 +43,7 @@ install(PROGRAMS
   scripts/ipp_mission.py
   scripts/guided_mission.py
   scripts/depth_publisher.py
+  scripts/lake_depth_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

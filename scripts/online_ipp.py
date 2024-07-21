@@ -272,8 +272,7 @@ class OnlineIPP(Node):
                               self.param_model.kernel)
         optimize_model(self.IPP_model, 
                        kernel_grad=False, 
-                       lr=1e-4, 
-                       optimizer='adam')
+                       optimizer='scipy')
 
         self.waypoints = self.IPP_model.inducing_variable.Z
         self.waypoints = self.IPP_model.transform.expand(self.waypoints).numpy()

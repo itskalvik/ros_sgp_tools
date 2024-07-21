@@ -43,7 +43,7 @@ def generate_launch_description():
 
         Node(
             package='ros_sgp_tools',
-            executable='depth_publisher.py',
+            executable='lake_depth_publisher.py',
             namespace=namespace,
             name='lake_depth_publisher'
         ),
