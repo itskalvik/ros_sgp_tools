@@ -36,8 +36,8 @@ class DepthPublisher(Node):
                                                               'lake_gt.csv')
         df = pd.read_csv(plan_fname)
         df = df.dropna()
-        x = df['DPTH.Lng'].to_numpy()[::10]
-        y = df['DPTH.Lat'].to_numpy()[::10]
+        x = df['DPTH.Lat'].to_numpy()[::10]
+        y = df['DPTH.Lng'].to_numpy()[::10]
         c = df['DPTH.Depth'].to_numpy()[::10]
 
         X_train = np.vstack([x, y]).T.astype(float)*1e-7
@@ -64,7 +64,7 @@ class DepthPublisher(Node):
 
     def data_callback(self, msg):
         self.depth_msg.header.stamp = self.get_clock().now().to_msg()
-        location = np.array([[msg.longitude, msg.latitude]])
+        location = np.array([[msg.latitude, msg.longitude]])
         location = self.X_scaler.transform(location)*10.0
         mean, _ = self.gpr_gt.predict_f(location)
         self.depth_msg.range = mean.numpy()[0][0]

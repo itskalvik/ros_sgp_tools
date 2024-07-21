@@ -183,7 +183,7 @@ class OnlineIPP(Node):
     def data_callback(self, position_msg, data_msg):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
-            self.data_X.append([position_msg.longitude, position_msg.latitude])
+            self.data_X.append([position_msg.latitude, position_msg.longitude])
             self.data_y.append(data_msg.range)
 
     def sync_waypoints(self):
@@ -211,9 +211,9 @@ class OnlineIPP(Node):
     def plot_paths(self, waypoints):
         plt.figure()
         waypoints = np.array(self.waypoints)
-        plt.scatter(self.X_train[:, 0], self.X_train[:, 1], 
+        plt.scatter(self.X_train[:, 1], self.X_train[:, 0], 
                     marker='.', s=1)
-        plt.plot(waypoints[:, 0], waypoints[:, 1], 
+        plt.plot(waypoints[:, 1], waypoints[:, 0], 
                  label='Path', marker='o', c='r')
         plt.savefig(f'IPPMission-({self.current_waypoint}).png')
         np.savetxt(f'IPPMission-({self.current_waypoint}).csv', waypoints)

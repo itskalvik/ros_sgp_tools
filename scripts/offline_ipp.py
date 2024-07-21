@@ -140,9 +140,9 @@ class offlineIPP(Node):
     def plot_paths(self):
         plt.figure()
         for i, path in enumerate(self.waypoints):
-            plt.plot(path[:, 0], path[:, 1], 
+            plt.plot(path[:, 1], path[:, 0], 
                      label='Path', zorder=0, marker='o')
-            plt.scatter(self.data[i][:, 0], self.data[i][:, 1],
+            plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
                         s=1, label='Candidates', zorder=1)
             np.savetxt(f'OfflineIPP-{i}.csv', path, delimiter=',')
         plt.savefig(f'OfflineIPP.png')

@@ -9,8 +9,6 @@ def plan2data(fname, num_samples=5000):
     with open(fname, "r") as infile:
         data = json.load(infile)
         vertices = np.array(data['geoFence']['polygons'][0]['polygon'])
-        # Swap lat/long
-        vertices[:,[1,0]] = vertices[:,[0,1]]
         home_position = data['mission']['plannedHomePosition']
 
     poly = geometry.Polygon(vertices)
