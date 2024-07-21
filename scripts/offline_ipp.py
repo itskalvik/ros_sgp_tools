@@ -91,7 +91,8 @@ class offlineIPP(Node):
                                       kernel,
                                       transform,
                                       Xu_init=Xu_init,
-                                      lr=1e-4)
+                                      optimizer='scipy',
+                                      method='CG')
 
         # Generate new paths from optimized waypoints
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
