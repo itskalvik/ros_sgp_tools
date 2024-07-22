@@ -19,7 +19,7 @@ def generate_launch_description():
         Node(
             package='ros_sgp_tools',
             executable='offline_ipp.py',
-            name='offline_ipp',
+            name='OfflineIPP',
             parameters=[
                 {'num_waypoints': num_waypoints,
                  'num_robots': num_robots,
@@ -32,12 +32,9 @@ def generate_launch_description():
             package='ros_sgp_tools',
             executable='online_ipp.py',
             namespace=namespace,
-            name='online_ipp',
+            name='OnlineIPP',
             parameters=[
-                {'num_waypoints': num_waypoints,
-                 'num_robots': num_robots,
-                 'geofence_plan': geofence_plan
-                }
+                {'geofence_plan': geofence_plan}
             ]
         ),
 
@@ -52,7 +49,7 @@ def generate_launch_description():
             package='ros_sgp_tools',
             executable='ipp_mission.py',
             namespace=namespace,
-            name='ipp_mission'
+            name='IPP-Mission'
         ),
 
         GroupAction(
