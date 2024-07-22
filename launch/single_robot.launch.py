@@ -49,7 +49,7 @@ def generate_launch_description():
             package='ros_sgp_tools',
             executable='ipp_mission.py',
             namespace=namespace,
-            name='IPP-Mission'
+            name='IPPMission'
         ),
 
         GroupAction(
