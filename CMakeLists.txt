@@ -44,6 +44,7 @@ install(PROGRAMS
   scripts/guided_mission.py
   scripts/depth_publisher.py
   scripts/lake_depth_publisher.py
+  scripts/uav_guided_mission.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
