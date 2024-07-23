@@ -120,6 +120,14 @@ class offlineIPP(Node):
         for i in range(self.num_robots):
             self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_train)
 
+        # Upscale sampling along waypoints to get a contiguous train set for each robot
+        IPP_model.transform.sampling_rate = 30
+        train_set_waypoints = IPP_model.transform.expand(IPP_model.inducing_variable.Z)
+        train_set_waypoints = train_set_waypoints.numpy().reshape(self.num_robots, -1, 2)
+
+        # Generate unlabeled training data for each robot
+        self.get_training_sets(train_set_waypoints)
+
         # Print path lengths
         self.get_logger().info('OfflineIPP: Initial IPP solution found') 
         path_lengths = transform.distance(np.concatenate(self.waypoints, axis=0)).numpy()
@@ -127,23 +135,20 @@ class offlineIPP(Node):
         for path_length in path_lengths:
             msg += f'{path_length:.2f} '
         self.get_logger().info(msg)
-
-        # Generate unlabeled training data for each robot
-        self.get_training_sets()
-
+        
         # Log generated paths and training sets
         self.plot_paths()
 
     '''
     Generate unlabeled training data for each robot
     '''
-    def get_training_sets(self):
+    def get_training_sets(self, waypoints):
         # Setup KNN training dataset
-        X = np.concatenate(self.waypoints, axis=0)
+        X = np.concatenate(waypoints, axis=0)
         y = []
         i = 0
         for i in range(self.num_robots):
-            y.extend(np.ones(len(self.waypoints[i]))*i)
+            y.extend(np.ones(len(waypoints[i]))*i)
             i += 1
         y = np.array(y).astype(int)
 
