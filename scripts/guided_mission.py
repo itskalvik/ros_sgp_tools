@@ -1,13 +1,11 @@
 #! /usr/bin/env python3
 
-from mavros_msgs.msg import State
-from mavros_msgs.srv import SetMode, CommandBool, CommandHome
+from mavros_msgs.srv import SetMode, CommandBool, CommandHome, CommandTOL
 from geographic_msgs.msg import GeoPoseStamped
 from sensor_msgs.msg import NavSatFix
-
-import rclpy
+from mavros_msgs.msg import State
 from rclpy.node import Node
-from rclpy.executors import ExternalShutdownException
+import rclpy
 
 import numpy as np
 
@@ -61,7 +59,7 @@ class MissionPlanner(Node):
 
     def at_waypoint(self, waypoint, tolerance=0.000007):
         """Check if the vehicle is at the waypoint."""
-        dist = np.linalg.norm(self.vehicle_position - np.array(waypoint))
+        dist = np.linalg.norm(self.vehicle_position[:2] - np.array(waypoint)[:2])
         if dist < tolerance:
             return True
         else:
@@ -74,7 +72,8 @@ class MissionPlanner(Node):
     def vehicle_position_callback(self, position):
         """Callback function for vehicle position topic subscriber."""
         self.vehicle_position = np.array([position.latitude, 
-                                          position.longitude])
+                                          position.longitude,
+                                          position.altitude])
 
     def arm(self, state=True, timeout=30):
         """Arm/Disarm the vehicle"""
@@ -104,6 +103,46 @@ class MissionPlanner(Node):
                 return False
 
         return True
+    
+    def takeoff(self, altitude=20.0, timeout=30):
+        """Takeoff the vehicle to the given height"""
+
+        takeoff_client = self.create_client(CommandTOL, 'mavros/cmd/takeoff')
+        while not takeoff_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Takeoff service not available, waiting again...')
+        self.get_logger().info('Takeoff service available')
+
+        takeoff_request = CommandTOL.Request()
+        takeoff_request.min_pitch = 0.0
+        takeoff_request.yaw = 0.0
+        takeoff_request.latitude = self.vehicle_position[0]
+        takeoff_request.longitude = self.vehicle_position[1]
+        takeoff_request.altitude = altitude
+
+        # Send request
+        future = takeoff_client.call_async(takeoff_request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
+        return future.result()
+
+    def land(self, altitude=0.0, timeout=30):
+        """Land the vehicle to the given height"""
+
+        self.land_client = self.create_client(CommandTOL, 'mavros/cmd/land')
+        while not self.land_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Land service not available, waiting again...')
+        self.get_logger().info('Land service available')
+
+        land_request = CommandTOL.Request()
+        land_request.min_pitch = 0.0
+        land_request.yaw = 0.0
+        land_request.latitude = self.vehicle_position[0]
+        land_request.longitude = self.vehicle_position[1]
+        land_request.altitude = altitude
+
+        # Send request
+        future = self.land_client.call_async(land_request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
+        return future.result()
     
     def engage_mode(self, mode="GUIDED", timeout=30):
         """Set the vehicle mode"""
@@ -156,6 +195,8 @@ class MissionPlanner(Node):
         """Go to waypoint (latitude, longitude) when in GUIDED mode and armed"""
         self.setpoint_position.pose.position.latitude = waypoint[0]
         self.setpoint_position.pose.position.longitude = waypoint[1]
+        if len(waypoint) > 2:
+            self.setpoint_position.pose.position.altitude = waypoint[2]
 
         start_time = self.get_clock().now().to_msg().sec
         last_request = start_time-6.0
@@ -213,14 +254,9 @@ class MissionPlanner(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    try:
-        mission_planner = MissionPlanner()
-        rclpy.spin_once(mission_planner)
-        mission_planner.mission()
-    except KeyboardInterrupt:
-        pass
-    except ExternalShutdownException:
-        mission_planner.destroy_node()
+    mission_planner = MissionPlanner()
+    rclpy.spin_once(mission_planner)
+    mission_planner.mission()
 
 
 if __name__ == '__main__':
