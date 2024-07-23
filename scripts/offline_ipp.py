@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 import os
-from utils import plan2data
+from utils import plan2data, project_waypoints
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
@@ -78,7 +78,8 @@ class offlineIPP(Node):
     def compute_init_paths(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(lengthscales=0.1, variance=0.5)
+        kernel = gpflow.kernels.RBF(lengthscales=0.1, 
+                                    variance=0.5)
 
         # Get the initial IPP solution
         transform = IPPTransform(n_dim=2, 
@@ -113,9 +114,11 @@ class offlineIPP(Node):
                        optimizer='scipy',
                        method='CG')
 
-        # Generate new paths from optimized waypoints
+        # Generate new paths from optimized waypoints and project them back to the bounds of the environment
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
                                                                        self.num_waypoints, -1)
+        for i in range(self.num_robots):
+            self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_train)
 
         # Print path lengths
         self.get_logger().info('OfflineIPP: Initial IPP solution found') 

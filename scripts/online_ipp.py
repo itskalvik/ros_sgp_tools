@@ -4,8 +4,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 import os
-from utils import plan2data
 import matplotlib.pyplot as plt
+from utils import plan2data, project_waypoints
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
@@ -71,7 +71,8 @@ class OnlineIPP(Node):
         plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
         self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
 
-        # Get the data and normalize 
+        # Get the data and normalize
+        # X_train is used only to get the normalization factors and then discarded
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
 
         X_train = np.array(X_train).reshape(-1, 2)
@@ -87,8 +88,7 @@ class OnlineIPP(Node):
         self.home_position = self.X_scaler.transform(home_position)
 
         # Setup the service to receive the waypoints and X_train data
-        self.srv = self.create_service(IPP, 
-                                       'offlineIPP', 
+        self.srv = self.create_service(IPP, 'offlineIPP', 
                                        self.offlineIPP_service_callback)
         
         # Wait to get the waypoints from the offline IPP planner
@@ -286,6 +286,7 @@ class OnlineIPP(Node):
 
         self.waypoints = self.IPP_model.inducing_variable.Z
         self.waypoints = self.IPP_model.transform.expand(self.waypoints).numpy()
+        self.waypoints = project_waypoints(self.waypoints, self.X_train)
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
