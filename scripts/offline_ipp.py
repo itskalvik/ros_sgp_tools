@@ -193,11 +193,15 @@ class offlineIPP(Node):
                     self.get_logger().info(f'{service} service not avaliable, waiting...')
 
                 waypoints = self.waypoints[robot_idx]
+                # Undo data normalization to map the coordinates to real world coordinates
+                waypoints = self.X_scaler.inverse_transform(np.array(waypoints))
                 for waypoint in waypoints:
                     request.data.waypoints.append(Point(x=waypoint[0],
                                                         y=waypoint[1]))
                     
                 train_pts = self.data[robot_idx]
+                # Undo data normalization to map the coordinates to real world coordinates
+                train_pts = self.X_scaler.inverse_transform(np.array(train_pts))
                 for point in train_pts:
                     request.data.x_train.append(Point(x=point[0],
                                                       y=point[1]))

@@ -3,10 +3,8 @@
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-import os
 import matplotlib.pyplot as plt
-from utils import plan2data, project_waypoints
-from ament_index_python.packages import get_package_share_directory
+from utils import project_waypoints
 
 import gpflow
 import numpy as np
@@ -63,29 +61,6 @@ class OnlineIPP(Node):
         self.declare_parameter('buffer_size', 100)
         self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
         self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
-
-        plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
-                                                              'launch', 
-                                                              'sample.plan')
-        self.declare_parameter('geofence_plan', plan_fname)
-        plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
-        self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
-
-        # Get the data and normalize
-        # X_train is used only to get the normalization factors and then discarded
-        X_train, home_position = plan2data(plan_fname, num_samples=5000)
-
-        X_train = np.array(X_train).reshape(-1, 2)
-        self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(X_train)
-
-        # Shift home position for each robot to avoid collision with other robots
-        robot_idx = self.get_namespace()
-        robot_idx = int(robot_idx.split('_')[-1])
-        home_position = np.array(home_position[:2])
-        home_position += np.array([3/111111, 0.0])*robot_idx
-        home_position = home_position.reshape(-1, 2)
-        self.home_position = self.X_scaler.transform(home_position)
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
@@ -148,7 +123,12 @@ class OnlineIPP(Node):
         for i in range(len(data)):
             self.X_train.append([float(data[i].x), float(data[i].y)])
         self.X_train = np.array(self.X_train)
-
+    
+        # Normalize the train set and waypoints
+        self.X_scaler = StandardScaler()
+        self.X_train = self.X_scaler.fit_transform(self.X_train)
+        self.waypoints = self.X_scaler.transform(np.array(self.waypoints))
+    
         response.success = True
         return response
     
@@ -170,7 +150,6 @@ class OnlineIPP(Node):
                                            self.transform,
                                            max_steps=0,
                                            Xu_init=self.waypoints)
-        self.IPP_model.transform.update_Xu_fixed(self.home_position.reshape(1, 1, 2))
         
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_train, 

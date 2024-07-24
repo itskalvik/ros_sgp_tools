@@ -33,9 +33,6 @@ def generate_launch_description():
             executable='online_ipp.py',
             namespace=namespace,
             name='OnlineIPP',
-            parameters=[
-                {'geofence_plan': geofence_plan}
-            ]
         ),
 
         Node(
