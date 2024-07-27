@@ -11,6 +11,7 @@ def generate_launch_description():
     namespace = 'robot_0'
     num_robots = 1
     num_waypoints = 30
+    sampling_rate = 2
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch',
                                           'lake.plan'])
@@ -23,6 +24,7 @@ def generate_launch_description():
             parameters=[
                 {'num_waypoints': num_waypoints,
                  'num_robots': num_robots,
+                 'sampling_rate': sampling_rate,
                  'geofence_plan': geofence_plan
                 }
             ]

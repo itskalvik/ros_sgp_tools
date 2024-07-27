@@ -32,6 +32,15 @@ class offlineIPP(Node):
     Note: Make sure the number of waypoints is small enough so that 
     the parameters update and waypoints updates are fast enough to 
     reach the robot before it reaches the next waypoint.
+
+    Args:
+        num_waypoints (int): The number of path waypoints to model.
+        num_robots (int): The number of IPP robots to model.
+        sampling_rate (int): Sensor sampling rate to model. When equal to 2, 
+                             the model assumes only the vertices of the paths are sensed. 
+                             When greater than 2, the model approximates a continuous sensing
+                             model with the given number of sampling rate. 
+        geofence_plan (str): File path to a GCS plan file with a polygon geofence and a launch position.
     """
     def __init__(self):
         super().__init__('OfflineIPP')
@@ -45,6 +54,12 @@ class offlineIPP(Node):
         self.declare_parameter('num_robots', 1)
         self.num_robots = self.get_parameter('num_robots').get_parameter_value().integer_value
         self.get_logger().info(f'Num Robots: {self.num_robots}')
+
+        self.declare_parameter('sampling_rate', 2)
+        self.sampling_rate = self.get_parameter('sampling_rate').get_parameter_value().integer_value
+        self.get_logger().info(f'Sampling Rate: {self.sampling_rate}')
+        if self.sampling_rate < 2:
+            raise Exception('Sampling rate needs to be greater than 1!')
 
         plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
                                                               'launch', 
@@ -83,6 +98,7 @@ class offlineIPP(Node):
 
         # Get the initial IPP solution
         transform = IPPTransform(n_dim=2, 
+                                 sampling_rate=self.sampling_rate,
                                  num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
@@ -187,6 +203,7 @@ class offlineIPP(Node):
             service = f'robot_{robot_idx}/offlineIPP'
             offline_ipp_service = self.create_client(IPP, service)
             request = IPP.Request()
+            request.data.sampling_rate = self.sampling_rate
 
             try:
                 while not offline_ipp_service.wait_for_service(timeout_sec=1.0):

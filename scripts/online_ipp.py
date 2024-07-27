@@ -103,7 +103,7 @@ class OnlineIPP(Node):
                                        callback_group=MutuallyExclusiveCallbackGroup())
 
     '''
-    Service callback to receive the waypoints and X_train data from offlineIPP node
+    Service callback to receive the waypoints, X_train, and sampling rate from offlineIPP node
 
     Args:
         req: Request containing the waypoints and X_train data
@@ -123,7 +123,9 @@ class OnlineIPP(Node):
         for i in range(len(data)):
             self.X_train.append([float(data[i].x), float(data[i].y)])
         self.X_train = np.array(self.X_train)
-    
+
+        self.sampling_rate = request.data.sampling_rate
+
         # Normalize the train set and waypoints
         self.X_scaler = StandardScaler()
         self.X_train = self.X_scaler.fit_transform(self.X_train)
