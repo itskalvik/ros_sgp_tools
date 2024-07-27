@@ -9,12 +9,13 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
     namespace = 'robot_0'
+    data_type = 'pressure'
     num_robots = 1
     num_waypoints = 30
     sampling_rate = 2
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch',
-                                          'lake.plan'])
+                                          'sample.plan'])
     
     return LaunchDescription([
         Node(
@@ -35,6 +36,9 @@ def generate_launch_description():
             executable='online_ipp.py',
             namespace=namespace,
             name='OnlineIPP',
+            parameters=[
+                {'data_type': data_type}
+            ]
         ),
 
         Node(

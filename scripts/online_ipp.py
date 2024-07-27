@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
-from sensor_msgs.msg import NavSatFix, Range
+from sensor_msgs.msg import NavSatFix, Range, FluidPressure
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
@@ -62,6 +62,10 @@ class OnlineIPP(Node):
         self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
         self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
 
+        self.declare_parameter('data_type', 'pressure')
+        self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
+        self.get_logger().info(f'Data Type: {self.data_type}')
+
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
                                        self.offlineIPP_service_callback)
@@ -90,9 +94,15 @@ class OnlineIPP(Node):
         self.position_sub = Subscriber(self, NavSatFix, 
                                        "mavros/global_position/global",
                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
-        self.data_sub = Subscriber(self, Range, 
-                                    "mavros/rangefinder_pub",
-                                    qos_profile=rclpy.qos.qos_profile_sensor_data)
+        if self.data_type == 'depth':
+            self.data_sub = Subscriber(self, Range, 
+                                        "mavros/rangefinder_pub",
+                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
+        elif self.data_type == 'pressure':
+            self.data_mean = None
+            self.data_sub = Subscriber(self, FluidPressure, 
+                                        "mavros/imu/static_pressure",
+                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
         self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.data_sub],
                                                      queue_size=10, slop=0.05)
         self.time_sync.registerCallback(self.data_callback)
@@ -174,8 +184,13 @@ class OnlineIPP(Node):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
             self.data_X.append([position_msg.latitude, position_msg.longitude])
-            self.data_y.append(data_msg.range)
-
+            if self.data_type == 'depth':
+                self.data_y.append(data_msg.range)
+            elif self.data_type == 'pressure':
+                if self.data_mean is None:
+                    self.data_mean = data_msg.fluid_pressure
+                self.data_y.append(data_msg.fluid_pressure-self.data_mean)                
+  
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
         # update the current waypoint from the service
