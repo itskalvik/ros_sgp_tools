@@ -15,7 +15,6 @@ find_package(rclpy REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/IPPData.msg"
-  "msg/SensorData.msg"
   "msg/WaypointsList.msg"
   "srv/IPP.srv"
   "srv/Waypoints.srv"
@@ -42,10 +41,8 @@ install(PROGRAMS
   scripts/online_ipp.py
   scripts/ipp_mission.py
   scripts/guided_mission.py
-  scripts/depth_publisher.py
   scripts/lake_depth_publisher.py
   scripts/uav_online_ipp.py
-  scripts/uav_ipp_mission.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

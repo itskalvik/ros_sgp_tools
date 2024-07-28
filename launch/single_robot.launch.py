@@ -9,13 +9,13 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
     namespace = 'robot_0'
-    data_type = 'pressure'
+    data_type = 'SonarData'
     num_robots = 1
     num_waypoints = 30
     sampling_rate = 2
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch',
-                                          'sample.plan'])
+                                          'lake.plan'])
     
     return LaunchDescription([
         Node(

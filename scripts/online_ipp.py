@@ -1,4 +1,5 @@
 #! /usr/bin/env python3
+import importlib
 
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -16,11 +17,11 @@ from sklearn.preprocessing import StandardScaler
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
 from std_msgs.msg import Int32
-from sensor_msgs.msg import NavSatFix, Range, FluidPressure
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from message_filters import Subscriber, ApproximateTimeSynchronizer
+from message_filters import ApproximateTimeSynchronizer
 
 import tensorflow as tf
 tf.random.set_seed(2024)
@@ -36,10 +37,11 @@ class OnlineIPP(Node):
     reach the robot before it reaches the next waypoint.
 
     Args:
-        X_train (np.ndarray): The training data for the IPP model, 
-                              used to approximate the bounds of the environment.
         num_param_inducing (int): The number of inducing points for the OSGPR model.
         buffer_size (int): The size of the buffers to store the sensor data.
+        data_type (str): The type of sensor data to use for kernel parameter updates.
+                         Any class name from sensors.py is a valid option.
+                         Currently supports: AltitudeData, SonarData, and PressureData.
     """
     def __init__(self):
         super().__init__('OnlineIPP')
@@ -62,7 +64,7 @@ class OnlineIPP(Node):
         self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
         self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
 
-        self.declare_parameter('data_type', 'pressure')
+        self.declare_parameter('data_type', 'AltitudeData')
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
         self.get_logger().info(f'Data Type: {self.data_type}')
 
@@ -91,19 +93,21 @@ class OnlineIPP(Node):
                                  self.current_waypoint_callback, 
                                  qos_profile)
 
-        self.position_sub = Subscriber(self, NavSatFix, 
-                                       "mavros/global_position/global",
-                                       qos_profile=rclpy.qos.qos_profile_sensor_data)
-        if self.data_type == 'depth':
-            self.data_sub = Subscriber(self, Range, 
-                                        "mavros/rangefinder_pub",
-                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
-        elif self.data_type == 'pressure':
-            self.data_mean = None
-            self.data_sub = Subscriber(self, FluidPressure, 
-                                        "mavros/imu/static_pressure",
-                                        qos_profile=rclpy.qos.qos_profile_sensor_data)
-        self.time_sync = ApproximateTimeSynchronizer([self.position_sub, self.data_sub],
+        # Setup data subscribers
+        sensors_module = importlib.import_module('sensors')
+        self.sensors = []
+        sensor_subscribers = []
+
+        data_obj = getattr(sensors_module, 'GPSData')()
+        self.sensors.append(data_obj)
+        sensor_subscribers.append(data_obj.get_subscriber(self))
+
+        if self.data_type != 'AltitudeData':
+            data_obj = getattr(sensors_module, self.data_type)()
+            self.sensors.append(data_obj)
+            sensor_subscribers.append(data_obj.get_subscriber(self))
+
+        self.time_sync = ApproximateTimeSynchronizer([*sensor_subscribers],
                                                      queue_size=10, slop=0.05)
         self.time_sync.registerCallback(self.data_callback)
 
@@ -180,16 +184,20 @@ class OnlineIPP(Node):
             rclpy.shutdown()
         self.current_waypoint = msg.data
 
-    def data_callback(self, position_msg, data_msg):
+    def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
-            self.data_X.append([position_msg.latitude, position_msg.longitude])
-            if self.data_type == 'depth':
-                self.data_y.append(data_msg.range)
-            elif self.data_type == 'pressure':
-                if self.data_mean is None:
-                    self.data_mean = data_msg.fluid_pressure
-                self.data_y.append(data_msg.fluid_pressure-self.data_mean)                
+            data_X = self.sensors[0].process_msg(args[0])
+            self.data_X.append([data_X[0], data_X[1]])
+
+            if len(args) == 1:
+                self.data_y.append(data_X[2])
+            else:
+                # position data is used by only a few sensors
+                data_y = self.sensors[1].process_msg(args[1], position=data_X)
+                self.data_y.append(data_y)
+
+            self.get_logger().info(f'{self.data_X[-1]} {self.data_y[-1]}')
   
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
@@ -238,15 +246,6 @@ class OnlineIPP(Node):
 
             # Normalize X locations
             data_X = self.X_scaler.transform(data_X)
-
-            '''
-            # Use only first batch to compute mean and std
-            if self.y_scaler is None:
-                self.y_scaler = StandardScaler()
-                data_y = self.y_scaler.fit_transform(data_y)
-            else:
-                data_y = self.y_scaler.transform(data_y)
-            '''
 
             # Empty global data buffers
             self.data_X = []
