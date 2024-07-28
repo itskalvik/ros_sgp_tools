@@ -187,17 +187,19 @@ class OnlineIPP(Node):
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
         if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
-            data_X = self.sensors[0].process_msg(args[0])
-            self.data_X.append([data_X[0], data_X[1]])
-
+            position = self.sensors[0].process_msg(args[0])
             if len(args) == 1:
-                self.data_y.append(data_X[2])
+                data_X = [position[:2]]
+                data_y = [position[2]]
             else:
                 # position data is used by only a few sensors
-                data_y = self.sensors[1].process_msg(args[1], position=data_X)
-                self.data_y.append(data_y)
+                data_X, data_y = self.sensors[1].process_msg(args[1], 
+                                                             position=position)
+                
+            self.data_X.extend(data_X)
+            self.data_y.extend(data_y)
 
-            self.get_logger().info(f'{self.data_X[-1]} {self.data_y[-1]}')
+            self.get_logger().info(f'{data_X} {data_y}')
   
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 

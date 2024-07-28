@@ -20,6 +20,13 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='ros_sgp_tools',
+            executable='lake_depth_publisher.py',
+            namespace=namespace,
+            name='lake_depth_publisher'
+        ),
+
+        Node(
+            package='ros_sgp_tools',
             executable='offline_ipp.py',
             name='OfflineIPP',
             parameters=[
@@ -39,13 +46,6 @@ def generate_launch_description():
             parameters=[
                 {'data_type': data_type}
             ]
-        ),
-
-        Node(
-            package='ros_sgp_tools',
-            executable='lake_depth_publisher.py',
-            namespace=namespace,
-            name='lake_depth_publisher'
         ),
 
         Node(
