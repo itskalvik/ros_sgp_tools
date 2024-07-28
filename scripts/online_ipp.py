@@ -198,8 +198,6 @@ class OnlineIPP(Node):
                 
             self.data_X.extend(data_X)
             self.data_y.extend(data_y)
-
-            self.get_logger().info(f'{data_X} {data_y}')
   
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 

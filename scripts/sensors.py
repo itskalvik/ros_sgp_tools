@@ -15,6 +15,7 @@ class SensorCallback:
     def process_msg(self, msg):
         pass
 
+
 class GPSData(SensorCallback):
     def get_subscriber(self, node_obj):
         sub =  Subscriber(node_obj, NavSatFix, 
@@ -92,5 +93,8 @@ class ZEDData(SensorCallback):
                 data_X.append(position[:2] + \
                               (self.bool_mask[i]*height*self.fov_scale*self.dist_scale))
                 data_y.append(data)
+
+        data_X = np.array(data_X).astype(float)
+        data_y = np.array(data_y).astype(float)
 
         return data_X, data_y
