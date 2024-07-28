@@ -65,7 +65,7 @@ class IPPMissionPlanner(MissionPlanner):
         for i in range(len(self.waypoints)):
             self.current_waypoint.data = i+1
             self.get_logger().info(f'Visiting waypoint {i+1}')
-            if self.go2waypoint([self.waypoints[i][0], self.waypoints[i][1]]):
+            if self.go2waypoint(self.waypoints[i]):
                 self.get_logger().info(f'Reached waypoint {i+1}')
 
         if self.arm(False):

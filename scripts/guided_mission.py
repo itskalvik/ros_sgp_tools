@@ -285,7 +285,7 @@ class MissionPlanner(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    mission_planner = MissionPlanner(use_altitude=True)
+    mission_planner = MissionPlanner(use_altitude=False)
     rclpy.spin_once(mission_planner)
     mission_planner.mission()
 
