@@ -72,9 +72,11 @@ class ZEDData(SensorCallback):
                                    [-1, -1], [0, -1], [1, -1]])
 
         # ZED FoV 110° (H) x 70° (V)
-        # Mapped to right triangle base for 1 meter height
-        self.fov_scale = np.array([1.42815, 0.70021])
-        self.dist_scale = 1/111111 # 1 meter offset in lat/long
+        # 110°*(4/6) x 70°*(4/6) FoV adjusted for 3x3 grid locations
+        # = 73.33° x 46.67°
+        # Mapped to right triangle base for 1 meter height and angle set to FoV
+        self.fov_scale = np.array([0.74443, 0.43139])
+        self.dist_scale = 1/111111 # 1 meter offset distance in lat/long
 
     def get_subscriber(self, node_obj):
         sub =  Subscriber(node_obj, Image, 
