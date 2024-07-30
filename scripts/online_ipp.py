@@ -64,7 +64,7 @@ class OnlineIPP(Node):
         self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
         self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
 
-        self.declare_parameter('data_type', 'AltitudeData')
+        self.declare_parameter('data_type', 'Altitude')
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
         self.get_logger().info(f'Data Type: {self.data_type}')
 
@@ -98,11 +98,11 @@ class OnlineIPP(Node):
         self.sensors = []
         sensor_subscribers = []
 
-        data_obj = getattr(sensors_module, 'GPSData')()
+        data_obj = getattr(sensors_module, 'GPS')()
         self.sensors.append(data_obj)
         sensor_subscribers.append(data_obj.get_subscriber(self))
 
-        if self.data_type != 'AltitudeData':
+        if self.data_type != 'Altitude':
             data_obj = getattr(sensors_module, self.data_type)()
             self.sensors.append(data_obj)
             sensor_subscribers.append(data_obj.get_subscriber(self))
@@ -215,7 +215,8 @@ class OnlineIPP(Node):
         self.plot_paths(waypoints)
         for waypoint in waypoints:
             request.waypoints.waypoints.append(Point(x=waypoint[0],
-                                                     y=waypoint[1]))
+                                                     y=waypoint[1],
+                                                     z=20.0))
         
         future = waypoints_service.call_async(request)
         while future.result() is not None:

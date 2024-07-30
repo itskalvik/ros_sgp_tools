@@ -16,7 +16,7 @@ class SensorCallback:
         pass
 
 
-class GPSData(SensorCallback):
+class GPS(SensorCallback):
     def get_subscriber(self, node_obj):
         sub =  Subscriber(node_obj, NavSatFix, 
                           "mavros/global_position/global",
@@ -27,7 +27,7 @@ class GPSData(SensorCallback):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
     
 
-class SonarData(SensorCallback):
+class Sonar(SensorCallback):
     def get_subscriber(self, node_obj):
         sub =  Subscriber(node_obj, Range, 
                           "mavros/rangefinder_pub",
@@ -38,7 +38,7 @@ class SonarData(SensorCallback):
         return [position[:2]], [msg.range]
 
 
-class PressureData(SensorCallback):
+class Pressure(SensorCallback):
     def __init__(self):
         self.data_mean = None
 
@@ -54,7 +54,7 @@ class PressureData(SensorCallback):
         return [position[:2]], [msg.fluid_pressure-self.data_mean]
 
 
-class ZEDData(SensorCallback):
+class ZED(SensorCallback):
     def __init__(self):
         # Setup variables to get data from depth map
         self.bridge = CvBridge()

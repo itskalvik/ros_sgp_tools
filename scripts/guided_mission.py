@@ -2,14 +2,16 @@
 
 from mavros_msgs.srv import SetMode, CommandBool, CommandHome, CommandTOL
 from geographic_msgs.msg import GeoPoseStamped
+from pygeodesy.geoids import GeoidPGM
 from sensor_msgs.msg import NavSatFix
 from mavros_msgs.msg import State
-from std_msgs.msg import Float64
 from rclpy.node import Node
 import rclpy
 
 import numpy as np
 from time import sleep
+
+_egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
 
 class MissionPlanner(Node):
@@ -35,11 +37,6 @@ class MissionPlanner(Node):
         self.vehicle_pose_subscriber = self.create_subscription(
             NavSatFix, 'mavros/global_position/global', 
             self.vehicle_position_callback, SENSOR_QOS)
-        
-        if self.use_altitude:
-            self.vehicle_altitude_subscriber = self.create_subscription(
-                Float64, '/mavros/global_position/rel_alt', 
-                self.vehicle_altitude_callback, SENSOR_QOS)
             
         # Create publishers
         self.setpoint_position_publisher = self.create_publisher(
@@ -61,19 +58,20 @@ class MissionPlanner(Node):
         self.arm_request = CommandBool.Request()
         self.set_mode_request = SetMode.Request()
         self.setpoint_position = GeoPoseStamped()
-
-        if self.use_altitude:
-            self.vehicle_position = np.array([0., 0., 0.])
-        else:
-            self.vehicle_position = np.array([0., 0.])
+        self.vehicle_position = np.array([0., 0., 0.])
 
         # Wait to get the state of the vehicle
         rclpy.spin_once(self, timeout_sec=5.0)
 
-    def at_waypoint(self, waypoint, tolerance=0.000007):
+    def at_waypoint(self, waypoint, xy_tolerance=0.000007, z_tolerance=0.3):
         """Check if the vehicle is at the waypoint."""
-        dist = np.linalg.norm(self.vehicle_position - np.array(waypoint))
-        if dist < tolerance:
+        xy_dist = np.linalg.norm(self.vehicle_position[:2] - waypoint[:2])
+        if self.use_altitude:
+            z_dist = np.abs(self.vehicle_position[2] - waypoint[2])
+        else: 
+            z_dist = 0.0
+
+        if xy_dist < xy_tolerance and z_dist < z_tolerance:
             return True
         else:
             return False
@@ -87,9 +85,9 @@ class MissionPlanner(Node):
         self.vehicle_position[0] = position.latitude
         self.vehicle_position[1] = position.longitude
 
-    def vehicle_altitude_callback(self, altitude):
-        """Callback function for vehicle_relative altitude topic subscriber."""
-        self.vehicle_position[2] = altitude.data
+        # Offset to convert ellipsoid to AMSL height
+        offset = _egm96.height(self.vehicle_position[0], self.vehicle_position[1])
+        self.vehicle_position[2] = position.altitude-offset
 
     def arm(self, state=True, timeout=30):
         """Arm/Disarm the vehicle"""
@@ -120,7 +118,7 @@ class MissionPlanner(Node):
 
         return True
     
-    def takeoff(self, altitude=20.0, timeout=30):
+    def takeoff(self, altitude=20.0, timeout=30, time_lim=900):
         """Takeoff the vehicle to the given height"""
 
         takeoff_client = self.create_client(CommandTOL, 'mavros/cmd/takeoff')
@@ -137,10 +135,24 @@ class MissionPlanner(Node):
 
         # Send request
         future = takeoff_client.call_async(takeoff_request)
+        self.get_logger().info('Taking off')
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
-        return future.result()
+        if future.result():
+            waypoint = [self.vehicle_position[0], 
+                        self.vehicle_position[1],
+                        altitude]
+            start_time = self.get_clock().now().to_msg().sec
+            while not self.at_waypoint(waypoint):
+                if self.get_clock().now().to_msg().sec - start_time > time_lim:
+                    self.get_logger().info(f'Timeout: Failed to takeoff')
+                    return False
+                rclpy.spin_once(self, timeout_sec=1.0)
+            return True
+        else: 
+            self.get_logger().info(f'COMMAND_ACK: Failed to takeoff')
+            return False  
 
-    def land(self, altitude=0.0, timeout=30):
+    def land(self, altitude=0.0, timeout=30, time_lim=900):
         """Land the vehicle to the given height"""
 
         self.land_client = self.create_client(CommandTOL, 'mavros/cmd/land')
@@ -157,8 +169,22 @@ class MissionPlanner(Node):
 
         # Send request
         future = self.land_client.call_async(land_request)
+        self.get_logger().info('Landing')
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
-        return future.result()
+        if future.result():
+            waypoint = [self.vehicle_position[0], 
+                        self.vehicle_position[1],
+                        altitude]
+            start_time = self.get_clock().now().to_msg().sec
+            while not self.at_waypoint(waypoint):
+                if self.get_clock().now().to_msg().sec - start_time > time_lim:
+                    self.get_logger().info(f'Timeout: Failed to land')
+                    return False
+                rclpy.spin_once(self, timeout_sec=1.0)
+            return True
+        else: 
+            self.get_logger().info(f'COMMAND_ACK: Failed to land')
+            return False  
     
     def engage_mode(self, mode="GUIDED", timeout=30):
         """Set the vehicle mode"""
@@ -238,7 +264,9 @@ class MissionPlanner(Node):
         return True
 
     def mission(self):
-        """GUIDED mission Rover"""
+        """GUIDED mission ArduRover/ArduCopter"""
+        sleep(4.0) # Wait to get position
+        mission_altitude = self.vehicle_position[2]
 
         self.get_logger().info('Engaging GUIDED mode')
         if self.engage_mode('GUIDED'):
@@ -248,34 +276,31 @@ class MissionPlanner(Node):
         if self.arm(True):
             self.get_logger().info('Armed')
 
-        if self.use_altitude:
-            mission_altitude = 20.0
-            self.get_logger().info('Taking off')
-            if self.takeoff(mission_altitude):
-                while np.abs(self.vehicle_position[2] - mission_altitude) > 0.3:
-                    rclpy.spin_once(self, timeout_sec=1.0)
-            self.get_logger().info('Takeoff complete')
-            sleep(4.0)
-
         self.get_logger().info('Setting current positon as home')
-        if self.set_home(self.vehicle_position[0], self.vehicle_position[1]):
+        if self.set_home(self.vehicle_position[0], 
+                         self.vehicle_position[1]):
             self.get_logger().info('Home position set')
 
+        if self.use_altitude:
+            self.get_logger().info(f'Alt: {mission_altitude}')
+            if self.takeoff(mission_altitude+20.0):
+                self.get_logger().info('Takeoff complete')
+
         self.get_logger().info('Visiting waypoint 1')
-        if self.go2waypoint([35.30684387683425, -80.7360063599907, 20.]):
+        if self.go2waypoint([35.30684387683425, 
+                             -80.7360063599907, 
+                             mission_altitude+20.0]):
             self.get_logger().info('Reached waypoint 1')
 
         self.get_logger().info('Visiting waypoint 2')
-        if self.go2waypoint([35.30674267884529, -80.73600329951549, 25.]):
+        if self.go2waypoint([35.30674267884529, 
+                             -80.73600329951549, 
+                             mission_altitude+25.0]):
             self.get_logger().info('Reached waypoint 2')
 
         if self.use_altitude:
-            self.get_logger().info('Landing')
             if self.land():
-                while self.vehicle_position[2] > 0.3:
-                    rclpy.spin_once(self, timeout_sec=1.0)
-            self.get_logger().info('Landing complete')
-            sleep(4.0)
+                self.get_logger().info('Landing complete')
 
         self.get_logger().info('Disarming')
         if self.arm(False):
@@ -285,13 +310,10 @@ class MissionPlanner(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    mission_planner = MissionPlanner(use_altitude=False)
+    mission_planner = MissionPlanner(use_altitude=True)
     rclpy.spin_once(mission_planner)
     mission_planner.mission()
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except Exception as e:
-        print(e)
+    main()
