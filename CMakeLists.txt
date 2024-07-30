@@ -42,7 +42,6 @@ install(PROGRAMS
   scripts/ipp_mission.py
   scripts/guided_mission.py
   scripts/lake_depth_publisher.py
-  scripts/uav_online_ipp.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

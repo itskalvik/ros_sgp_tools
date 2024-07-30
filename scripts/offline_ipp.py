@@ -55,6 +55,10 @@ class offlineIPP(Node):
         self.num_robots = self.get_parameter('num_robots').get_parameter_value().integer_value
         self.get_logger().info(f'Num Robots: {self.num_robots}')
 
+        self.declare_parameter('use_altitude', False)
+        self.use_altitude = self.get_parameter('use_altitude').get_parameter_value().bool_value
+        self.get_logger().info(f'Use Altitude: {self.use_altitude}')
+
         self.declare_parameter('sampling_rate', 2)
         self.sampling_rate = self.get_parameter('sampling_rate').get_parameter_value().integer_value
         self.get_logger().info(f'Sampling Rate: {self.sampling_rate}')
@@ -204,7 +208,8 @@ class offlineIPP(Node):
             offline_ipp_service = self.create_client(IPP, service)
             request = IPP.Request()
             request.data.sampling_rate = self.sampling_rate
-
+            request.data.use_altitude = self.use_altitude
+            
             try:
                 while not offline_ipp_service.wait_for_service(timeout_sec=1.0):
                     self.get_logger().info(f'{service} service not avaliable, waiting...')

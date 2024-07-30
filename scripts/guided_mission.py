@@ -282,7 +282,6 @@ class MissionPlanner(Node):
             self.get_logger().info('Home position set')
 
         if self.use_altitude:
-            self.get_logger().info(f'Alt: {mission_altitude}')
             if self.takeoff(mission_altitude+20.0):
                 self.get_logger().info('Takeoff complete')
 
@@ -299,7 +298,7 @@ class MissionPlanner(Node):
             self.get_logger().info('Reached waypoint 2')
 
         if self.use_altitude:
-            if self.land():
+            if self.land(mission_altitude):
                 self.get_logger().info('Landing complete')
 
         self.get_logger().info('Disarming')

@@ -125,11 +125,14 @@ class OnlineIPP(Node):
         WaypointsResponse: Response containing the success flag
     '''
     def offlineIPP_service_callback(self, request, response):
-        data = request.data.waypoints
+        self.use_altitude = request.data.use_altitude
+        self.n_dim = 3 if self.use_altitude else 2
 
+        data = request.data.waypoints
         self.waypoints = []
         for i in range(len(data)):
-            self.waypoints.append([data[i].x, data[i].y])
+            self.waypoints.append([data[i].x, data[i].y, data[i].z])
+        self.waypoints = np.array(self.waypoints)[:, :self.n_dim]
         self.num_waypoints = len(self.waypoints)
 
         data = request.data.x_train
@@ -157,7 +160,7 @@ class OnlineIPP(Node):
         # Initilize SGP for IPP with path received from offline IPP node
         kernel = gpflow.kernels.RBF(lengthscales=lengthscales, 
                                     variance=variance)
-        self.transform = IPPTransform(n_dim=2,
+        self.transform = IPPTransform(n_dim=self.n_dim,
                                       num_robots=1)
         self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                            self.X_train,
@@ -198,7 +201,7 @@ class OnlineIPP(Node):
                 
             self.data_X.extend(data_X)
             self.data_y.extend(data_y)
-  
+
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
         # update the current waypoint from the service
@@ -214,9 +217,10 @@ class OnlineIPP(Node):
         waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
         self.plot_paths(waypoints)
         for waypoint in waypoints:
+            z = waypoint[2] if self.use_altitude else 20.0
             request.waypoints.waypoints.append(Point(x=waypoint[0],
                                                      y=waypoint[1],
-                                                     z=20.0))
+                                                     z=z))
         
         future = waypoints_service.call_async(request)
         while future.result() is not None:
@@ -269,7 +273,7 @@ class OnlineIPP(Node):
 
         # Freeze the visited inducing points
         Xu_visited = self.waypoints.copy()[:current_waypoint]
-        Xu_visited = np.array(Xu_visited).reshape(1, -1, 2)
+        Xu_visited = np.array(Xu_visited).reshape(1, -1, self.n_dim)
         self.IPP_model.transform.update_Xu_fixed(Xu_visited)
 
         # Get the new inducing points for the path
