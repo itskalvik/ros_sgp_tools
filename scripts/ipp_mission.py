@@ -66,7 +66,7 @@ class IPPMissionPlanner(MissionPlanner):
             self.get_logger().info('Armed')
 
         if self.use_altitude:
-            if self.takeoff(mission_altitude+20.0):
+            if self.takeoff(mission_altitude+10.0):
                 self.get_logger().info('Takeoff complete')
 
         for i in range(len(self.waypoints)):
@@ -90,7 +90,7 @@ class IPPMissionPlanner(MissionPlanner):
 
 def main(args=None):
     rclpy.init(args=args)
-    mission_planner = IPPMissionPlanner()
+    mission_planner = IPPMissionPlanner(True)
     rclpy.spin_once(mission_planner)
 
 if __name__ == '__main__':

@@ -9,13 +9,13 @@ from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
     namespace = 'robot_0'
-    data_type = 'Sonar'
+    data_type = 'Altitude'
     num_robots = 1
     num_waypoints = 20
     sampling_rate = 2
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch',
-                                          'lake.plan'])
+                                          'trail.plan'])
     
     return LaunchDescription([
         Node(
@@ -31,13 +31,6 @@ def generate_launch_description():
             ]
         ),
 
-        Node(
-            package='ros_sgp_tools',
-            executable='lake_depth_publisher.py',
-            name='FakeSonarData',
-            namespace=namespace,
-        ),
-        
         Node(
             package='ros_sgp_tools',
             executable='online_ipp.py',
