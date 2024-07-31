@@ -90,7 +90,7 @@ class IPPMissionPlanner(MissionPlanner):
 
 def main(args=None):
     rclpy.init(args=args)
-    mission_planner = IPPMissionPlanner(True)
+    mission_planner = IPPMissionPlanner()
     rclpy.spin_once(mission_planner)
 
 if __name__ == '__main__':
