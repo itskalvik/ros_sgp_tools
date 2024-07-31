@@ -9,7 +9,6 @@ import numpy as np
 from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 
 from ros_sgp_tools.srv import IPP
@@ -77,13 +76,15 @@ class offlineIPP(Node):
         
         self.X_train = np.array(X_train).reshape(-1, 2)
         self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(self.X_train)
+        self.X_scaler.fit(self.X_train)
+
+        # Use same scaling in both axis to accomodate square FoV model
+        self.X_scaler.scale_[1] = self.X_scaler.scale_[0]
+        self.X_scaler.var_[1] = self.X_scaler.var_[0]
+        self.X_train = self.X_scaler.transform(self.X_train)
 
         # Shift home position for each robot to avoid collision with other robots
-        home_positions = []
-        for i in range(self.num_robots):
-            home_positions.append(np.array(home_position[:2]) + (np.array([3/111111, 0.0])*i))
-        home_position = np.array(home_positions).reshape(-1, 2)
+        home_position = np.array(home_position[:2]).reshape(-1, 2)
         self.home_position = self.X_scaler.transform(home_position)
 
         # Get initial solution paths
@@ -101,22 +102,30 @@ class offlineIPP(Node):
                                     variance=0.5)
 
         # Get the initial IPP solution
-        transform = IPPTransform(n_dim=2, 
+        fov_transform = SquareHeightTransform(3)
+        transform = IPPTransform(num_dim=3, 
                                  sampling_rate=self.sampling_rate,
-                                 num_robots=self.num_robots)
+                                 num_robots=self.num_robots,
+                                 sensor_model=fov_transform)
+        
         # Sample uniform random initial waypoints and compute initial paths
-        Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
+        Xu_init = get_inducing_pts(self.X_train, 
+                                   self.num_waypoints*self.num_robots,
+                                   orientation=True)
+        # Init rotations, i.e., height at noisy 20.0
+        Xu_init[:, 2] = 10.0 * np.random.rand(self.num_waypoints)
 
         # Add fixed home position
-        for i in range(self.num_robots):
-            Xu_init[i] = self.home_position[i]
+        Xu_init[0, :2] = self.home_position
 
-        Xu_init, _ = run_tsp(Xu_init, 
-                             num_vehicles=self.num_robots,
-                             resample=self.num_waypoints,
-                             start_idx=np.arange(self.num_robots).tolist())
+        Xu_init_, _ = run_tsp(Xu_init[:, :2], 
+                              num_vehicles=self.num_robots,
+                              resample=self.num_waypoints,
+                              start_idx=np.arange(self.num_robots).tolist())
+        Xu_init[:, :2] = Xu_init_
+        Xu_init = Xu_init.reshape(1, -1, 3)
         Xu_fixed = np.copy(Xu_init[:, :1, :])
-        Xu_init = np.array(Xu_init).reshape(-1, 2)
+        Xu_init = np.array(Xu_init).reshape(-1, 3)
 
         # Initialize the SGP
         IPP_model, _ = continuous_sgp(self.num_waypoints, 
@@ -137,16 +146,16 @@ class offlineIPP(Node):
         # Generate new paths from optimized waypoints and project them back to the bounds of the environment
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
                                                                        self.num_waypoints, -1)
-        for i in range(self.num_robots):
-            self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_train)
+        self.waypoints = tf.concat([IPP_model.transform.Xu_fixed,
+                                    self.waypoints[:, IPP_model.transform.num_fixed:]], 
+                                    axis=1)
+        self.waypoints = self.waypoints.numpy().reshape(self.num_robots, self.num_waypoints, -1)
 
-        # Upscale sampling along waypoints to get a contiguous train set for each robot
-        IPP_model.transform.sampling_rate = 30
-        train_set_waypoints = IPP_model.transform.expand(IPP_model.inducing_variable.Z)
-        train_set_waypoints = train_set_waypoints.numpy().reshape(self.num_robots, -1, 2)
+        self.waypoints[0, :, :2] = project_waypoints(self.waypoints[0, :, :2], self.X_train)
+        #self.waypoints[i, :, 2] = np.clip(self.waypoints[i, :, 2], 20.0, 50.0)
 
         # Generate unlabeled training data for each robot
-        self.get_training_sets(train_set_waypoints)
+        self.get_training_sets()
 
         # Print path lengths
         self.get_logger().info('OfflineIPP: Initial IPP solution found') 
@@ -162,25 +171,11 @@ class offlineIPP(Node):
     '''
     Generate unlabeled training data for each robot
     '''
-    def get_training_sets(self, waypoints):
-        # Setup KNN training dataset
-        X = np.concatenate(waypoints, axis=0)
-        y = []
-        i = 0
-        for i in range(self.num_robots):
-            y.extend(np.ones(len(waypoints[i]))*i)
-            i += 1
-        y = np.array(y).astype(int)
-
-        # Train KNN and get predictions
-        neigh = KNeighborsClassifier(n_neighbors=3)
-        neigh.fit(X, y)
-        y_pred = neigh.predict(self.X_train)
-
+    def get_training_sets(self):
         # Format data for transmission
         self.data = []
         for i in range(self.num_robots):
-            self.data.append(self.X_train[np.where(y_pred==i)[0]])
+            self.data.append(self.X_train)
 
     '''
     Log generated paths and training sets
@@ -189,13 +184,17 @@ class offlineIPP(Node):
         plt.figure()
         for i, path in enumerate(self.waypoints):
             plt.plot(path[:, 1], path[:, 0], 
-                     label='Path', zorder=1, marker='o', c='r')
+                     label='Path', zorder=1, marker='o')
+            plt.scatter(path[:, 1], path[:, 0], 
+                        zorder=2, marker='o', c=path[:, 2])
             plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
                         s=1, label='Candidates', zorder=0)
             np.savetxt(f'OfflineIPP-{i}.csv', path, delimiter=',')
         plt.scatter(self.home_position[:, 1], self.home_position[:, 0],
-                    label='Home position', zorder=2, c='g')
+                    label='Home position', zorder=3, c='g')
+        plt.colorbar()
         plt.legend()
+        plt.title(f'{path[:, 2]}')
         plt.savefig(f'OfflineIPP.png')
 
     '''
@@ -219,7 +218,8 @@ class offlineIPP(Node):
                 waypoints = self.X_scaler.inverse_transform(np.array(waypoints))
                 for waypoint in waypoints:
                     request.data.waypoints.append(Point(x=waypoint[0],
-                                                        y=waypoint[1]))
+                                                        y=waypoint[1],
+                                                        z=waypoint[2]))
                     
                 train_pts = self.data[robot_idx]
                 # Undo data normalization to map the coordinates to real world coordinates

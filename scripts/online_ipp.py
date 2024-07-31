@@ -160,13 +160,16 @@ class OnlineIPP(Node):
         # Initilize SGP for IPP with path received from offline IPP node
         kernel = gpflow.kernels.RBF(lengthscales=lengthscales, 
                                     variance=variance)
-        self.transform = IPPTransform(n_dim=self.n_dim,
-                                      num_robots=1)
+        fov_transform = SquareHeightTransform(3)
+        transform = IPPTransform(num_dim=3, 
+                                 sampling_rate=self.sampling_rate,
+                                 num_robots=1,
+                                 sensor_model=fov_transform)
         self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                            self.X_train,
                                            likelihood_variance,
                                            kernel,
-                                           self.transform,
+                                           transform,
                                            max_steps=0,
                                            Xu_init=self.waypoints)
         
@@ -176,7 +179,6 @@ class OnlineIPP(Node):
                                       lengthscales=lengthscales, 
                                       variance=variance, 
                                       noise_variance=likelihood_variance)
-
 
     '''
     Callback to get the current waypoint and shutdown the node once the mission ends
@@ -284,9 +286,12 @@ class OnlineIPP(Node):
                        optimizer='scipy',
                        method='CG')
 
-        self.waypoints = self.IPP_model.inducing_variable.Z
-        self.waypoints = self.IPP_model.transform.expand(self.waypoints).numpy()
-        self.waypoints = project_waypoints(self.waypoints, self.X_train)
+        self.waypoints = self.IPP_model.inducing_variable.Z.numpy().reshape(1, -1, self.n_dim)
+        self.waypoints = tf.concat([self.IPP_model.transform.Xu_fixed,
+                                    self.waypoints[:, self.IPP_model.transform.num_fixed:]], 
+                                    axis=1)
+        self.waypoints = self.waypoints.numpy().reshape(-1, self.n_dim)
+        self.waypoints[:, :2] = project_waypoints(self.waypoints[:, :2], self.X_train)
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
