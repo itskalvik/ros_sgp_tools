@@ -32,7 +32,7 @@ class DepthPublisher(Node):
 
         # Raw data from path
         plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
-                                                              'launch', 
+                                                              'launch', 'params',
                                                               'lake_gt.csv')
         df = pd.read_csv(plan_fname)
         df = df.dropna()

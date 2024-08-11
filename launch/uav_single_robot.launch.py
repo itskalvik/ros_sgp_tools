@@ -13,7 +13,7 @@ def generate_launch_description():
     num_robots = 1
     num_waypoints = 30
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                          'launch',
+                                          'launch', 'plans',
                                           'lake.plan'])
     
     return LaunchDescription([
