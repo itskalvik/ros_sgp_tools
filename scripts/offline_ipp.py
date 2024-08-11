@@ -192,11 +192,13 @@ class offlineIPP(Node):
                      label='Path', zorder=1, marker='o', c='r')
             plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
                         s=1, label='Candidates', zorder=0)
-            np.savetxt(f'OfflineIPP-{i}.csv', path, delimiter=',')
+            np.savetxt(f'IPPMission-(-1)-{i}.csv', 
+                       self.X_scaler.inverse_transform(np.array(path)),
+                       delimiter=',')
         plt.scatter(self.home_position[:, 1], self.home_position[:, 0],
                     label='Home position', zorder=2, c='g')
         plt.legend()
-        plt.savefig(f'OfflineIPP.png')
+        plt.savefig(f'IPPMission-(-1)-{i}.png')
 
     '''
     Send the new waypoints to the trajectory planner and 

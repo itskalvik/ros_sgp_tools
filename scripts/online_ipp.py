@@ -233,8 +233,10 @@ class OnlineIPP(Node):
                     marker='.', s=1)
         plt.plot(waypoints[:, 1], waypoints[:, 0], 
                  label='Path', marker='o', c='r')
-        plt.savefig(f'IPPMission-({self.current_waypoint}).png')
-        np.savetxt(f'IPPMission-({self.current_waypoint}).csv', waypoints)
+        plt.savefig(f'IPPMission-({self.current_waypoint+1}).png')
+        np.savetxt(f'IPPMission-({self.current_waypoint+1}).csv', 
+                   self.X_scaler.inverse_transform(waypoints),
+                   delimiter=',')
 
     def update_with_data(self, force_update=False):
         # Update the parameters and waypoints if the buffer is full and 
