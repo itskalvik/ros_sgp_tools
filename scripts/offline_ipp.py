@@ -1,11 +1,12 @@
 #! /usr/bin/env python3
 
 import os
-from utils import plan2data, project_waypoints
+from utils import plan2data
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
 import numpy as np
+from sgptools.utils.misc import project_waypoints
 from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
@@ -100,10 +101,6 @@ class offlineIPP(Node):
         kernel = gpflow.kernels.RBF(lengthscales=0.1, 
                                     variance=0.5)
 
-        # Get the initial IPP solution
-        transform = IPPTransform(n_dim=2, 
-                                 sampling_rate=self.sampling_rate,
-                                 num_robots=self.num_robots)
         # Sample uniform random initial waypoints and compute initial paths
         Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
 
@@ -118,29 +115,29 @@ class offlineIPP(Node):
         Xu_fixed = np.copy(Xu_init[:, :1, :])
         Xu_init = np.array(Xu_init).reshape(-1, 2)
 
-        # Initialize the SGP
+        # Get the initial IPP solution
+        transform = IPPTransform(n_dim=2, 
+                                 sampling_rate=self.sampling_rate,
+                                 num_robots=self.num_robots)
+        transform.update_Xu_fixed(Xu_fixed)
+
+        # Initialize the SGP method and optimize the path
         IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                       self.X_train,
                                       likelihood_variance,
                                       kernel,
                                       transform,
                                       Xu_init=Xu_init,
-                                      max_steps=0)
-        IPP_model.transform.update_Xu_fixed(Xu_fixed)
+                                      optimizer='scipy',
+                                      method='CG')
 
-        # Get the new inducing points for the path
-        optimize_model(IPP_model, 
-                       kernel_grad=False, 
-                       optimizer='scipy',
-                       method='CG')
-
-        # Generate new paths from optimized waypoints and project them back to the bounds of the environment
+        # Project the waypoints to be within the bounds of the environment
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
                                                                        self.num_waypoints, -1)
         for i in range(self.num_robots):
             self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_train)
 
-        # Upscale sampling along waypoints to get a contiguous train set for each robot
+        # Upsample the path waypoints and partition the environment into seperate monitoring regions
         IPP_model.transform.sampling_rate = 30
         train_set_waypoints = IPP_model.transform.expand(IPP_model.inducing_variable.Z)
         train_set_waypoints = train_set_waypoints.numpy().reshape(self.num_robots, -1, 2)
@@ -160,7 +157,7 @@ class offlineIPP(Node):
         self.plot_paths()
 
     '''
-    Generate unlabeled training data for each robot
+    Generate unlabeled training points, i.e., monitoring regions for each robot
     '''
     def get_training_sets(self, waypoints):
         # Setup KNN training dataset

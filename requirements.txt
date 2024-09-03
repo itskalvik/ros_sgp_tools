@@ -1,3 +1,4 @@
 sgptools
 geopandas
 pygeodesy
+shapely

@@ -5,10 +5,10 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 import matplotlib.pyplot as plt
-from utils import project_waypoints
 
 import gpflow
 import numpy as np
+from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
@@ -108,7 +108,7 @@ class OnlineIPP(Node):
             sensor_subscribers.append(data_obj.get_subscriber(self))
 
         self.time_sync = ApproximateTimeSynchronizer([*sensor_subscribers],
-                                                     queue_size=10, slop=0.05)
+                                                     queue_size=10, slop=0.1)
         self.time_sync.registerCallback(self.data_callback)
 
         # Setup the timer to update the parameters and waypoints
@@ -161,6 +161,7 @@ class OnlineIPP(Node):
         kernel = gpflow.kernels.RBF(lengthscales=lengthscales, 
                                     variance=variance)
         self.transform = IPPTransform(n_dim=self.n_dim,
+                                      sampling_rate=self.sampling_rate,
                                       num_robots=1)
         self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
                                            self.X_train,
@@ -239,9 +240,8 @@ class OnlineIPP(Node):
                    delimiter=',')
 
     def update_with_data(self, force_update=False):
-        # Update the parameters and waypoints if the buffer is full and 
-        # empty the buffer after updating 
-
+        # Update the hyperparameters and waypoints if the buffer is full 
+        # or if force_update is True and atleast num_param_inducing data points are available
         if len(self.data_X) > self.buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
@@ -287,7 +287,8 @@ class OnlineIPP(Node):
                        method='CG')
 
         self.waypoints = self.IPP_model.inducing_variable.Z
-        self.waypoints = self.IPP_model.transform.expand(self.waypoints).numpy()
+        self.waypoints = self.IPP_model.transform.expand(self.waypoints,
+                                                         expand_sensor_model=False).numpy()
         self.waypoints = project_waypoints(self.waypoints, self.X_train)
 
     def update_param(self, X_new, y_new):
@@ -298,7 +299,7 @@ class OnlineIPP(Node):
                        trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='scipy')
 
-        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
+        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.8f}')
         self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
 
 
