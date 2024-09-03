@@ -30,7 +30,10 @@ Run the following commands in separate terminals:
     ```
     sim_vehicle.py -v Rover -f rover-skid --model JSON --add-param-file=$HOME/SITL_Models/Gazebo/config/r1_rover.param --console --map -N -l 35.30371178789218,-80.73099267294185,0.,0.
     ```
-    Note: Restart sim_vechile.py if you get the following message: ```paramftp: bad count 1294 should be 1284```
+    Note: 
+    - Restart sim_vechile.py if you get the following message: ```paramftp: bad count```
+    - Ensure the MAV Console shows that the vehicle has a GPS lock before running the next command
+    - Ensure the MAV Map shows the vehicle before running the next command
 
 - Launch [SGP-Tools](http://itskalvik.com/sgp-tools) Online IPP method:
     ```

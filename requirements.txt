@@ -2,3 +2,4 @@ sgptools
 geopandas
 pygeodesy
 shapely
+scipy <= 1.13.1

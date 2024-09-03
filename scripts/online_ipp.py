@@ -299,7 +299,7 @@ class OnlineIPP(Node):
                        trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='scipy')
 
-        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.8f}')
+        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
         self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
 
 
