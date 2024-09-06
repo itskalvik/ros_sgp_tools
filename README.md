@@ -5,18 +5,17 @@
 </div>
 
 # ros_sgp_tools
-This repo provides the ROS2 companion package for [SGP-Tools](http://itskalvik.com/sgp-tools) python library. 
+The [ros_sgp_tools](https://github.com/itskalvik/ros_sgp_tools) package provides a [ROS2](https://github.com/ros2) companion package for the [SGP-Tools](http://itskalvik.com/sgp-tools) python library that can be deployed on [ArduPilot-based vehicles](https://ardupilot.org/copter/docs/common-use-cases-and-applications.html). 
 
-- The package can be used to run online IPP on ArduPilot based UGVs and ASVs. 
+- The package can be used to run online/adaptive IPP on ArduPilot based UGVs and ASVs. 
 - The package can also be used with Gazebo/Ardupilot SITL.
 - To use our Docker container with the preconfigured development environment, please refer to the documentation [here](https://github.com/itskalvik/docker-sgp-tools?tab=readme-ov-file#docker-sgp-tools). 
 
-### Running SGP-Tools Online IPP with Gazebo/ArduRover Simulator
+![Image title](.assets/ros2_ardupilot.png)
 
-<div style="text-align:left">
-<img width="1000" src=".assets/demo.png">
-</a></p>
-</div>
+## Running SGP-Tools Online/Adaptive IPP with Gazebo/ArduRover Simulator
+
+![Image title](.assets/demo.png)
 
 Run the following commands in separate terminals:
 
@@ -35,12 +34,12 @@ Run the following commands in separate terminals:
     - Ensure the MAV Console shows that the vehicle has a GPS lock before running the next command
     - Ensure the MAV Map shows the vehicle before running the next command
 
-- Launch [SGP-Tools](http://itskalvik.com/sgp-tools) Online IPP method:
+- Launch the [SGP-Tools](http://itskalvik.com/sgp-tools) Online/Adaptive IPP method:
     ```
     ros2 launch ros_sgp_tools single_robot.launch.py
     ```
 
-### Environment setup
+## Environment setup
 - To use our Docker container with the preconfigured development environment, please refer to the documentation [here](https://github.com/itskalvik/docker-sgp-tools?tab=readme-ov-file#docker-sgp-tools). 
 
 Alternatively, please follow the following instructions to configure the development envirnoment on your local machine. 
@@ -71,7 +70,7 @@ Alternatively, please follow the following instructions to configure the develop
   echo "export GZ_SIM_RESOURCE_PATH=$HOME/ardupilot_gazebo/models:$HOME/ardupilot_gazebo/worlds:$HOME/SITL_Models/Gazebo/models:$HOME/SITL_Models/Gazebo/worlds:$GZ_SIM_RESOURCE_PATH" >> ~/.bashrc
   ```
 
-### Package setup
+## Package setup
 
 - Install apt dependencies 
   ```
