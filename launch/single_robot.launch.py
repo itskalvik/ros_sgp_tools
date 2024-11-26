@@ -59,6 +59,7 @@ def generate_launch_description():
             actions=[
                 # push_ros_namespace to set namespace of included nodes
                 PushRosNamespace(namespace),
+                # MAVROS
                 IncludeLaunchDescription(
                     XMLLaunchDescriptionSource([
                         PathJoinSubstitution([
@@ -69,7 +70,24 @@ def generate_launch_description():
                     ]),
                     launch_arguments={
                     }.items()
+                ),
+            ]
+        ),
+
+        GroupAction(
+            actions=[
+                # push_ros_namespace to set namespace of included nodes
+                PushRosNamespace(namespace),
+                # Foxglove (web-based rviz)
+                IncludeLaunchDescription(
+                    XMLLaunchDescriptionSource([
+                        PathJoinSubstitution([
+                            FindPackageShare('foxglove_bridge'),
+                            'launch',
+                            'foxglove_bridge_launch.xml'
+                        ])
+                    ]),
                 )
             ]
-        )
+        ),
     ])
