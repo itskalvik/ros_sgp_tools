@@ -47,6 +47,12 @@ class offlineIPP(Node):
         super().__init__('OfflineIPP')
         self.get_logger().info('Initializing')
 
+        # folder to save the waypoints
+        try:
+            self.data_folder = os.environ['DATA_FOLDER']
+        except:
+            self.data_folder = ''
+
         # Declare parameters
         self.declare_parameter('num_waypoints', 10)
         self.num_waypoints = self.get_parameter('num_waypoints').get_parameter_value().integer_value
@@ -189,13 +195,15 @@ class offlineIPP(Node):
                      label='Path', zorder=1, marker='o', c='r')
             plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
                         s=1, label='Candidates', zorder=0)
-            np.savetxt(f'IPPMission-(-1)-{i}.csv', 
+            np.savetxt(os.path.join(self.data_folder, 
+                                    f'IPPMission-(-1)-{i}.csv'), 
                        self.X_scaler.inverse_transform(np.array(path)),
                        delimiter=',')
         plt.scatter(self.home_position[:, 1], self.home_position[:, 0],
                     label='Home position', zorder=2, c='g')
         plt.legend()
-        plt.savefig(f'IPPMission-(-1)-{i}.png')
+        plt.savefig(os.path.join(self.data_folder, 
+                                 f'IPPMission-(-1)-{i}.png'))
 
     '''
     Send the new waypoints to the trajectory planner and 

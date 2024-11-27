@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+
+import os
 import importlib
 
 from rclpy.executors import MultiThreadedExecutor
@@ -47,6 +49,12 @@ class OnlineIPP(Node):
         super().__init__('OnlineIPP')
         self.get_logger().info('Initializing')
 
+        # folder to save the waypoints
+        try:
+            self.data_folder = os.environ['DATA_FOLDER']
+        except:
+            self.data_folder = ''
+
         qos_profile = QoSProfile(depth=10)  
         
         # setup variables
@@ -68,6 +76,10 @@ class OnlineIPP(Node):
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
         self.get_logger().info(f'Data Type: {self.data_type}')
 
+        self.declare_parameter('adaptive_ipp', True)
+        self.adaptive_ipp = self.get_parameter('adaptive_ipp').get_parameter_value().bool_value
+        self.get_logger().info(f'Adaptive IPP: {self.adaptive_ipp}')
+
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
                                        self.offlineIPP_service_callback)
@@ -86,6 +98,10 @@ class OnlineIPP(Node):
         # Sync the waypoints with the mission planner
         self.sync_waypoints()
         self.get_logger().info('Initial waypoints synced with the mission planner')
+
+        if not self.adaptive_ipp:
+            self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
+            rclpy.shutdown()
 
         # Setup the subscribers
         self.create_subscription(Int32, 
@@ -234,8 +250,10 @@ class OnlineIPP(Node):
                     marker='.', s=1)
         plt.plot(waypoints[:, 1], waypoints[:, 0], 
                  label='Path', marker='o', c='r')
-        plt.savefig(f'IPPMission-({self.current_waypoint+1}).png')
-        np.savetxt(f'IPPMission-({self.current_waypoint+1}).csv', 
+        plt.savefig(os.path.join(self.data_folder, 
+                                 f'IPPMission-({self.current_waypoint+1}).png'))
+        np.savetxt(os.path.join(self.data_folder, 
+                                f'IPPMission-({self.current_waypoint+1}).csv'), 
                    self.X_scaler.inverse_transform(waypoints),
                    delimiter=',')
 
