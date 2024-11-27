@@ -76,6 +76,10 @@ class OnlineIPP(Node):
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
         self.get_logger().info(f'Data Type: {self.data_type}')
 
+        self.declare_parameter('adaptive_ipp', True)
+        self.adaptive_ipp = self.get_parameter('adaptive_ipp').get_parameter_value().bool_value
+        self.get_logger().info(f'Adaptive IPP: {self.adaptive_ipp}')
+
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
                                        self.offlineIPP_service_callback)
@@ -94,6 +98,10 @@ class OnlineIPP(Node):
         # Sync the waypoints with the mission planner
         self.sync_waypoints()
         self.get_logger().info('Initial waypoints synced with the mission planner')
+
+        if not self.adaptive_ipp:
+            self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
+            rclpy.shutdown()
 
         # Setup the subscribers
         self.create_subscription(Int32, 
