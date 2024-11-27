@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+
+import os
 import importlib
 
 from rclpy.executors import MultiThreadedExecutor
@@ -46,6 +48,12 @@ class OnlineIPP(Node):
     def __init__(self):
         super().__init__('OnlineIPP')
         self.get_logger().info('Initializing')
+
+        # folder to save the waypoints
+        try:
+            self.data_folder = os.environ['DATA_FOLDER']
+        except:
+            self.data_folder = ''
 
         qos_profile = QoSProfile(depth=10)  
         
@@ -234,8 +242,10 @@ class OnlineIPP(Node):
                     marker='.', s=1)
         plt.plot(waypoints[:, 1], waypoints[:, 0], 
                  label='Path', marker='o', c='r')
-        plt.savefig(f'IPPMission-({self.current_waypoint+1}).png')
-        np.savetxt(f'IPPMission-({self.current_waypoint+1}).csv', 
+        plt.savefig(os.path.join(self.data_folder, 
+                                 f'IPPMission-({self.current_waypoint+1}).png'))
+        np.savetxt(os.path.join(self.data_folder, 
+                                f'IPPMission-({self.current_waypoint+1}).csv'), 
                    self.X_scaler.inverse_transform(waypoints),
                    delimiter=',')
 
