@@ -24,7 +24,7 @@ def generate_launch_description():
     fake_data = False
     start_foxglove = False
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                          'data',
+                                          'launch', 'data',
                                           'mission.plan'])
     nodes = []
 
