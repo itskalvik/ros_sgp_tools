@@ -21,11 +21,11 @@ def generate_launch_description():
     num_waypoints = 20
     sampling_rate = 2
     adaptive_ipp = True
-    fake_data = True
+    fake_data = False
     start_foxglove = False
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                          'launch', 'plans',
-                                          'lake.plan'])
+                                          'data',
+                                          'mission.plan'])
     nodes = []
 
     offline_planner = Node(package='ros_sgp_tools',
