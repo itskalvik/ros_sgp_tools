@@ -27,16 +27,22 @@ class GPS(SensorCallback):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
     
 
-class Sonar(SensorCallback):
+class SerialPing2(SensorCallback):
+    def __init__(self):
+        self.topic = "mavros/rangefinder_pub"
+
     def get_subscriber(self, node_obj):
-        sub =  Subscriber(node_obj, Range, 
-                          "mavros/rangefinder_pub",
-                          qos_profile=qos_profile_sensor_data)
+        sub = Subscriber(node_obj, Range, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data)
         return sub
     
     def process_msg(self, msg, position):
         return [position[:2]], [msg.range]
-
+    
+class Ping2(SerialPing2):
+    def __init__(self):
+        self.topic = "ping1d/range"
 
 class Pressure(SensorCallback):
     def __init__(self):

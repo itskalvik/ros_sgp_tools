@@ -16,7 +16,7 @@ if total_memory < 4e9:
 
 def generate_launch_description():
     namespace = 'robot_0'
-    data_type = 'Sonar'
+    data_type = 'SerialPing2'
     num_robots = 1
     num_waypoints = 20
     sampling_rate = 2
@@ -96,11 +96,22 @@ def generate_launch_description():
                     )
         nodes.append(foxglove)
    
-    if fake_data:
+    if fake_data and data_type=='SerialPing2':
+        print("Publishing Fake Sonar Data")
         sensor = Node(package='ros_sgp_tools',
                       executable='lake_depth_publisher.py',
                       name='FakeSonarData',
                       namespace=namespace)
         nodes.append(sensor)
-        
+
+    if data_type=='Ping2':
+        sensor = Node(package='ping_sonar_ros',
+                      executable='ping1d_node',
+                      name='Ping2',
+                      namespace=namespace,
+                      parameters=[
+                        {'port': '/dev/ttyUSB0'}
+                      ])
+        nodes.append(sensor)       
+
     return LaunchDescription(nodes)
