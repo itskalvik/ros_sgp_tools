@@ -1,3 +1,7 @@
+import os
+import sys
+import psutil
+
 from launch_ros.actions import Node
 from launch import LaunchDescription
 from launch_ros.actions import PushRosNamespace
@@ -6,23 +10,38 @@ from launch_ros.substitutions import FindPackageShare
 from launch.actions import GroupAction, IncludeLaunchDescription
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
-import sys
-import psutil
-
-# Sanity check to avoid crashing the system because of low memory
-total_memory = psutil.virtual_memory().total + psutil.swap_memory().total
-if total_memory < 4e9:
-    sys.exit("Low memory (less than 4GB), increase swap size!")
+def get_var(var, default):
+    try:
+        return os.environ[var]
+    except:
+        return default
 
 def generate_launch_description():
-    namespace = 'robot_0'
-    data_type = 'SerialPing2'
+    # Sanity check to avoid crashing the system because of low memory
+    total_memory = psutil.virtual_memory().total + psutil.swap_memory().total
+    if total_memory < 4e9:
+        sys.exit("Low memory (less than 4GB), increase swap size!")
+
+    # Get initial variable values
+    namespace = get_var('NAMESPACE', 'robot_0')
+    data_type = get_var('DATA_TYPE' ,'SerialPing2')
+    num_waypoints = get_var('NUM_WAYPOINTS', 20)
+    sampling_rate = get_var('SAMPLING_RATE', 2)
+    adaptive_ipp = get_var('ADAPTIVE_IPP', True)
+    start_foxglove = get_var('START_FOXGLOVE', False)
+
+    print("\nParameters:")
+    print("===========")
+    print(f"NAMESPACE: {namespace}")
+    print(f"DATA_TYPE: {data_type}")
+    print(f"NUM_WAYPOINTS: {num_waypoints}")
+    print(f"SAMPLING_RATE: {sampling_rate}")
+    print(f"ADAPTIVE_IPP: {adaptive_ipp}")
+    print(f"START_FOXGLOVE: {start_foxglove}\n")
+
     num_robots = 1
-    num_waypoints = 20
-    sampling_rate = 2
-    adaptive_ipp = True
     fake_data = False
-    start_foxglove = False
+
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch', 'data',
                                           'mission.plan'])
