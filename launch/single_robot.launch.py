@@ -124,12 +124,13 @@ def generate_launch_description():
         nodes.append(sensor)
 
     if data_type=='Ping2':
+        ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
         sensor = Node(package='ping_sonar_ros',
                       executable='ping1d_node',
                       name='Ping2',
                       namespace=namespace,
                       parameters=[
-                        {'port': '/dev/ttyUSB0'}
+                        {'port': ping2_port}
                       ])
         nodes.append(sensor)       
 
