@@ -22,13 +22,13 @@ def generate_launch_description():
     if total_memory < 4e9:
         sys.exit("Low memory (less than 4GB), increase swap size!")
 
-    # Get initial variable values
+    # Get parameter values
     namespace = get_var('NAMESPACE', 'robot_0')
     data_type = get_var('DATA_TYPE' ,'SerialPing2')
-    num_waypoints = get_var('NUM_WAYPOINTS', 20)
-    sampling_rate = get_var('SAMPLING_RATE', 2)
-    adaptive_ipp = get_var('ADAPTIVE_IPP', True)
-    start_foxglove = get_var('START_FOXGLOVE', False)
+    num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
+    sampling_rate = int(get_var('SAMPLING_RATE', 2))
+    adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
+    start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
 
     print("\nParameters:")
     print("===========")
