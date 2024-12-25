@@ -117,7 +117,8 @@ class offlineIPP(Node):
         Xu_init, _ = run_tsp(Xu_init, 
                              num_vehicles=self.num_robots,
                              resample=self.num_waypoints,
-                             start_idx=np.arange(self.num_robots).tolist())
+                             start_idx=np.arange(self.num_robots).tolist(),
+                             time_limit=20)
         Xu_fixed = np.copy(Xu_init[:, :1, :])
         Xu_init = np.array(Xu_init).reshape(-1, 2)
 
@@ -158,9 +159,6 @@ class offlineIPP(Node):
         for path_length in path_lengths:
             msg += f'{path_length:.2f} '
         self.get_logger().info(msg)
-        
-        # Log generated paths and training sets
-        self.plot_paths()
 
     '''
     Generate unlabeled training points, i.e., monitoring regions for each robot

@@ -43,7 +43,7 @@ def generate_launch_description():
     print(f"NUM_WAYPOINTS: {num_waypoints}")
     print(f"SAMPLING_RATE: {sampling_rate}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
-    print(f"START_FOXGLOVE: {start_foxglove}\n")
+    print(f"START_FOXGLOVE: {start_foxglove}")
     print(f"FAKE_DATA: {fake_data}\n")
 
     nodes = []

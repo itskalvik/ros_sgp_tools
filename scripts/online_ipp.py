@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 import os
-import json
+import h5py
 import importlib
 
 from rclpy.executors import MultiThreadedExecutor
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 import gpflow
 import numpy as np
+from time import gmtime, strftime
 from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
@@ -56,6 +57,11 @@ class OnlineIPP(Node):
         except:
             self.data_folder = ''
 
+        time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+        self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
+        if not os.path.exists(self.data_folder):
+            os.makedirs(self.data_folder)
+
         qos_profile = QoSProfile(depth=10)  
         
         # setup variables
@@ -80,6 +86,18 @@ class OnlineIPP(Node):
         self.declare_parameter('adaptive_ipp', True)
         self.adaptive_ipp = self.get_parameter('adaptive_ipp').get_parameter_value().bool_value
         self.get_logger().info(f'Adaptive IPP: {self.adaptive_ipp}')
+
+        # Create sensor data h5py file
+        data_fname = os.path.join(self.data_folder, f'mission-log.hdf5')
+        self.data_file = h5py.File(data_fname, "a")
+        self.dset_X = self.data_file.create_dataset("X", (0, 2), 
+                                                    maxshape=(None, 2), 
+                                                    dtype=np.float32,
+                                                    chunks=True)
+        self.dset_y = self.data_file.create_dataset("y", (0, 1), 
+                                                    maxshape=(None, 1), 
+                                                    dtype=np.float32,
+                                                    chunks=True)
 
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
@@ -159,6 +177,13 @@ class OnlineIPP(Node):
         self.X_train = np.array(self.X_train)
 
         self.sampling_rate = request.data.sampling_rate
+
+        # Save candidates and sampling rate to data store
+        dset = self.data_file.create_dataset("candidates", 
+                                             self.X_train.shape, 
+                                             dtype=np.float32,
+                                             data=self.X_train)
+        dset.attrs['sampling_rate'] = self.sampling_rate
 
         # Normalize the train set and waypoints
         self.X_scaler = CustomStandardScaler()
@@ -246,34 +271,32 @@ class OnlineIPP(Node):
             rclpy.spin_once(self, timeout_sec=0.5)
 
     def plot_paths(self, waypoints):
-        fname = os.path.join(self.data_folder, 'solution_waypoints.json')
-        if os.path.exists(fname):
-            with open(fname, 'r') as file:
-                json_data = json.load(file)
-        else:
-            json_data = {}
+        waypoints = np.array(self.waypoints)
         current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
-        json_data[f"waypoint-{current_waypoint}"] = []
+
+        dset = self.data_file.create_dataset(f"waypoints-{current_waypoint}", 
+                                             waypoints.shape, 
+                                             dtype=np.float32,
+                                             data=self.X_scaler.inverse_transform(waypoints))
+        dset.attrs['lengthscales'] = self.param_model.kernel.lengthscales.numpy()
+        dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
+        dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
 
         plt.figure()
         plt.gca().set_aspect('equal')
         plt.xlabel('X')
         plt.xlabel('Y')
-        waypoints = np.array(self.waypoints)
         plt.scatter(self.X_train[:, 0], self.X_train[:, 1], 
                     marker='.', s=1, label='Candidates')
         plt.plot(waypoints[:, 0], waypoints[:, 1], 
                  label='Path', marker='o', c='r')
         plt.scatter(waypoints[current_waypoint, 0], waypoints[current_waypoint, 1],
                     label='Update Waypoint', zorder=2, c='g')
-        json_data[f"waypoint-{current_waypoint}"].append(self.X_scaler.inverse_transform(waypoints).tolist())
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
                                  f'waypoints-({current_waypoint}).png'),
                                  bbox_inches='tight')
         plt.close()
-        with open(fname, 'w', encoding='utf-8') as f:
-            json.dump(json_data, f, ensure_ascii=False, indent=4)
 
     def update_with_data(self, force_update=False):
         # Update the hyperparameters and waypoints if the buffer is full 
@@ -287,16 +310,13 @@ class OnlineIPP(Node):
             data_X = np.array(self.data_X).reshape(-1, 2)
             data_y = np.array(self.data_y).reshape(-1, 1)
 
-            # Normalize X locations
-            data_X = self.X_scaler.transform(data_X)
-
             # Empty global data buffers
             self.data_X = []
             self.data_y = []
 
             # Update the parameters and the waypoints after 
             # the current waypoint the robot is heading to
-            self.update_param(data_X, data_y)
+            self.update_param(self.X_scaler.transform(data_X), data_y)
             self.update_waypoints(self.current_waypoint)
 
             # Sync the waypoints with the mission planner
@@ -305,6 +325,13 @@ class OnlineIPP(Node):
             end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info('Updated waypoints synced with the mission planner')
             self.get_logger().info(f'Update time: {end_time-start_time} secs')
+
+            # Dump data to data store
+            self.dset_X.resize(self.dset_X.shape[0]+len(data_X), axis=0)   
+            self.dset_X[-len(data_X):] = data_X
+
+            self.dset_y.resize(self.dset_y.shape[0]+len(data_y), axis=0)   
+            self.dset_y[-len(data_y):] = data_y
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
