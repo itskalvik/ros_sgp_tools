@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 import os
-from utils import plan2data
+from utils import plan2data, CustomStandardScaler
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
@@ -11,7 +11,6 @@ from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import StandardScaler
 
 from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
@@ -83,8 +82,9 @@ class offlineIPP(Node):
         X_train, home_position = plan2data(plan_fname, num_samples=5000)
         
         self.X_train = np.array(X_train).reshape(-1, 2)
-        self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(self.X_train)
+        self.X_scaler = CustomStandardScaler()
+        self.X_scaler.fit(self.X_train)
+        self.X_train = self.X_scaler.transform(self.X_train)
 
         # Shift home position for each robot to avoid collision with other robots
         home_positions = []
@@ -190,20 +190,21 @@ class offlineIPP(Node):
     '''
     def plot_paths(self):
         plt.figure()
+        plt.gca().set_aspect('equal')
+        plt.xlabel('X')
+        plt.xlabel('Y')
         for i, path in enumerate(self.waypoints):
-            plt.plot(path[:, 1], path[:, 0], 
+            plt.plot(path[:, 0], path[:, 1], 
                      label='Path', zorder=1, marker='o', c='r')
-            plt.scatter(self.data[i][:, 1], self.data[i][:, 0],
+            plt.scatter(self.data[i][:, 0], self.data[i][:, 1],
                         s=1, label='Candidates', zorder=0)
-            np.savetxt(os.path.join(self.data_folder, 
-                                    f'IPPMission-(-1)-{i}.csv'), 
-                       self.X_scaler.inverse_transform(np.array(path)),
-                       delimiter=',')
-        plt.scatter(self.home_position[:, 1], self.home_position[:, 0],
+        plt.scatter(self.home_position[:, 0], self.home_position[:, 1],
                     label='Home position', zorder=2, c='g')
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
-                                 f'IPPMission-(-1)-{i}.png'))
+                                 f'waypoints-(-1)-{i}.png'),
+                                 bbox_inches='tight')
+        plt.close()
 
     '''
     Send the new waypoints to the trajectory planner and 

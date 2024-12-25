@@ -29,7 +29,13 @@ def generate_launch_description():
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
-
+    fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
+    
+    num_robots = 1
+    geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
+                                          'launch', 'data',
+                                          'mission.plan'])
+    
     print("\nParameters:")
     print("===========")
     print(f"NAMESPACE: {namespace}")
@@ -38,13 +44,8 @@ def generate_launch_description():
     print(f"SAMPLING_RATE: {sampling_rate}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
     print(f"START_FOXGLOVE: {start_foxglove}\n")
+    print(f"FAKE_DATA: {fake_data}\n")
 
-    num_robots = 1
-    fake_data = False
-
-    geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                          'launch', 'data',
-                                          'mission.plan'])
     nodes = []
 
     offline_planner = Node(package='ros_sgp_tools',

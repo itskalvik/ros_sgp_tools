@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import os
+import json
 import importlib
 
 from rclpy.executors import MultiThreadedExecutor
@@ -14,7 +15,7 @@ from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
-from sklearn.preprocessing import StandardScaler
+from utils import CustomStandardScaler
 
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
@@ -160,8 +161,9 @@ class OnlineIPP(Node):
         self.sampling_rate = request.data.sampling_rate
 
         # Normalize the train set and waypoints
-        self.X_scaler = StandardScaler()
-        self.X_train = self.X_scaler.fit_transform(self.X_train)
+        self.X_scaler = CustomStandardScaler()
+        self.X_scaler.fit(self.X_train)
+        self.X_train = self.X_scaler.transform(self.X_train)
         self.waypoints = self.X_scaler.transform(np.array(self.waypoints))
     
         response.success = True
@@ -244,18 +246,34 @@ class OnlineIPP(Node):
             rclpy.spin_once(self, timeout_sec=0.5)
 
     def plot_paths(self, waypoints):
+        fname = os.path.join(self.data_folder, 'solution_waypoints.json')
+        if os.path.exists(fname):
+            with open(fname, 'r') as file:
+                json_data = json.load(file)
+        else:
+            json_data = {}
+        current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
+        json_data[f"waypoint-{current_waypoint}"] = []
+
         plt.figure()
+        plt.gca().set_aspect('equal')
+        plt.xlabel('X')
+        plt.xlabel('Y')
         waypoints = np.array(self.waypoints)
-        plt.scatter(self.X_train[:, 1], self.X_train[:, 0], 
-                    marker='.', s=1)
-        plt.plot(waypoints[:, 1], waypoints[:, 0], 
+        plt.scatter(self.X_train[:, 0], self.X_train[:, 1], 
+                    marker='.', s=1, label='Candidates')
+        plt.plot(waypoints[:, 0], waypoints[:, 1], 
                  label='Path', marker='o', c='r')
+        plt.scatter(waypoints[current_waypoint, 0], waypoints[current_waypoint, 1],
+                    label='Update Waypoint', zorder=2, c='g')
+        json_data[f"waypoint-{current_waypoint}"].append(self.X_scaler.inverse_transform(waypoints).tolist())
+        plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
-                                 f'IPPMission-({self.current_waypoint+1}).png'))
-        np.savetxt(os.path.join(self.data_folder, 
-                                f'IPPMission-({self.current_waypoint+1}).csv'), 
-                   self.X_scaler.inverse_transform(waypoints),
-                   delimiter=',')
+                                 f'waypoints-({current_waypoint}).png'),
+                                 bbox_inches='tight')
+        plt.close()
+        with open(fname, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=4)
 
     def update_with_data(self, force_update=False):
         # Update the hyperparameters and waypoints if the buffer is full 
