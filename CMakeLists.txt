@@ -42,6 +42,7 @@ install(PROGRAMS
   scripts/ipp_mission.py
   scripts/guided_mission.py
   scripts/lake_depth_publisher.py
+  scripts/data_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
