@@ -108,16 +108,12 @@ class offlineIPP(Node):
                                     variance=0.5)
 
         # Sample uniform random initial waypoints and compute initial paths
-        Xu_init = get_inducing_pts(self.X_train, self.num_waypoints*self.num_robots)
-
-        # Add fixed home position
-        for i in range(self.num_robots):
-            Xu_init[i] = self.home_position[i]
-
-        Xu_init, _ = run_tsp(Xu_init, 
+        # Sample one less waypoint per robot and add the home position as the first waypoint
+        Xu_init = get_inducing_pts(self.X_train, (self.num_waypoints-1)*self.num_robots)
+        Xu_init, _ = run_tsp(Xu_init,
                              num_vehicles=self.num_robots,
                              resample=self.num_waypoints,
-                             start_idx=np.arange(self.num_robots).tolist(),
+                             start_nodes=self.home_position,
                              time_limit=20)
         Xu_fixed = np.copy(Xu_init[:, :1, :])
         Xu_init = np.array(Xu_init).reshape(-1, 2)
@@ -126,6 +122,7 @@ class offlineIPP(Node):
         transform = IPPTransform(n_dim=2, 
                                  sampling_rate=self.sampling_rate,
                                  num_robots=self.num_robots)
+        # Don't update the first waypoint (home position)
         transform.update_Xu_fixed(Xu_fixed)
 
         # Initialize the SGP method and optimize the path
