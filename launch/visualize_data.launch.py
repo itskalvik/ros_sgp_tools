@@ -15,12 +15,18 @@ def generate_launch_description():
                                            description='Mission log folder')
     nodes.append(mision_log_arg)
 
+    # Number of samples
+    num_samples_arg = DeclareLaunchArgument('num_samples', default_value='5000',
+                                            description='Number of samples used to visualize the data')
+    nodes.append(num_samples_arg)
+
     # Point cloud publisher
     pcd_publisher = Node(package='ros_sgp_tools',
                          executable='data_visualizer.py',
                          name='pcd_publisher',
                          parameters=[
-                            {'mission_log': LaunchConfiguration('mission_log')}
+                            {'mission_log': LaunchConfiguration('mission_log'),
+                             'num_samples': LaunchConfiguration('num_samples')}
                          ])
     nodes.append(pcd_publisher)
 

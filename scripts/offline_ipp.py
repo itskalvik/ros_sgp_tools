@@ -1,12 +1,12 @@
 #! /usr/bin/env python3
 
 import os
-from utils import plan2data, CustomStandardScaler
+from utils import get_mission_plan, CustomStandardScaler
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
 import numpy as np
-from sgptools.utils.misc import project_waypoints
+from sgptools.utils.misc import project_waypoints, ploygon2candidats
 from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
@@ -79,9 +79,9 @@ class offlineIPP(Node):
         self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
 
         # Get the data and normalize 
-        X_train, home_position = plan2data(plan_fname, num_samples=5000)
-        
-        self.X_train = np.array(X_train).reshape(-1, 2)
+        self.fence_vertices, home_position = get_mission_plan(plan_fname)
+        self.X_train = ploygon2candidats(self.fence_vertices, num_samples=5000)
+        self.X_train = np.array(self.X_train).reshape(-1, 2)
         self.X_scaler = CustomStandardScaler()
         self.X_scaler.fit(self.X_train)
         self.X_train = self.X_scaler.transform(self.X_train)
@@ -223,13 +223,18 @@ class offlineIPP(Node):
                 for waypoint in waypoints:
                     request.data.waypoints.append(Point(x=waypoint[0],
                                                         y=waypoint[1]))
-                    
+                
                 train_pts = self.data[robot_idx]
                 # Undo data normalization to map the coordinates to real world coordinates
                 train_pts = self.X_scaler.inverse_transform(np.array(train_pts))
                 for point in train_pts:
                     request.data.x_train.append(Point(x=point[0],
                                                       y=point[1]))
+
+                for point in self.fence_vertices:
+                    request.data.fence_vertices.append(Point(x=point[0],
+                                                             y=point[1]))
+
                 future = offline_ipp_service.call_async(request)
                 rclpy.spin_until_future_complete(self, future)
                 if future.result() is not None:

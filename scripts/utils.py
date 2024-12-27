@@ -1,25 +1,16 @@
 import utm
 import json
 import numpy as np
-import geopandas as gpd
-from shapely import geometry
 from sklearn.preprocessing import StandardScaler
 
 
 # Extract geofence and home location from QGC plan file
-def plan2data(fname, num_samples=5000):
+def get_mission_plan(fname):
     with open(fname, "r") as infile:
         data = json.load(infile)
         vertices = np.array(data['geoFence']['polygons'][0]['polygon'])
         home_position = data['mission']['plannedHomePosition']
-
-    poly = geometry.Polygon(vertices)
-    sampler = gpd.GeoSeries([poly])
-    candidates = sampler.sample_points(size=num_samples,
-                                       rng=2024)
-    candidates = candidates.get_coordinates().to_numpy()
-
-    return candidates, home_position
+    return vertices, home_position
 
 class CustomStandardScaler(StandardScaler):
     def fit(self, X, y=None, sample_weight=None):
@@ -41,6 +32,10 @@ class CustomStandardScaler(StandardScaler):
         X = utm.from_latlon(X[:, 0], X[:, 1])
         X = np.vstack([X[0], X[1]]).T
         return super().transform(X, copy=copy)
+    
+    def fit_transform(self, X, y=None, **fit_params):
+        self.fit(X, y, **fit_params)
+        return self.transform(X)
 
     def inverse_transform(self, X, copy=None):
         X = super().inverse_transform(X, copy=copy)

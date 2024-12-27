@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 from utils import CustomStandardScaler
 from sgptools.utils.gpflow import *
+from sgptools.utils.misc import ploygon2candidats
 
 tf.random.set_seed(2024)
 np.random.seed(2024)
@@ -31,11 +32,15 @@ class DataVisualizer(Node):
         self.declare_parameter('mission_log', '')
         mission_log = self.get_parameter('mission_log').get_parameter_value().string_value
 
+        self.declare_parameter('num_samples', 5000)
+        self.num_samples = self.get_parameter('num_samples').get_parameter_value().integer_value
+
         # Get the latest log folder
         if mission_log == '':
             logs = os.listdir(data_folder)
             mission_log = sorted([log for log in logs if 'IPP-mission' in log])[-1]
         self.get_logger().info(f'Mission Log: {mission_log}')
+        self.get_logger().info(f'Number of samples: {self.num_samples}')
 
         # data file
         self.fname = os.path.join(data_folder, 
@@ -44,14 +49,17 @@ class DataVisualizer(Node):
 
         # load data
         with h5py.File(self.fname, "r") as f:
-            self.X_candidates = f["candidates"][:].astype(float)
+            self.fence_vertices = f["fence_vertices"][:].astype(float)
             self.X = f["X"][:].astype(float)
             self.y = f["y"][:].astype(float)
 
         # Normalize the candidates
+        X_candidates = ploygon2candidats(self.fence_vertices, 
+                                         num_samples=self.num_samples)
         self.X_scaler = CustomStandardScaler()
-        self.X_scaler.fit(self.X_candidates)
-        self.X_candidates = self.X_scaler.transform(self.X_candidates)    
+        self.X_scaler.fit(X_candidates)
+        self.X_scaler.scale_ *= 0.35
+        X_candidates = self.X_scaler.transform(X_candidates)    
         self.X = self.X_scaler.transform(self.X)
 
         # Train GP
@@ -60,10 +68,10 @@ class DataVisualizer(Node):
         self.gpr_gt = gpflow.models.GPR(data=(self.X, self.y), 
                                         kernel=kernel)
         optimize_model(self.gpr_gt)
-        self.candidates_y = self.gpr_gt.predict_f(self.X_candidates)[0].numpy()
         
         # Create point cloud
-        self.point_cloud_msg = self.point_cloud(np.concatenate([self.X_candidates,
+        self.candidates_y = self.gpr_gt.predict_f(X_candidates)[0].numpy()
+        self.point_cloud_msg = self.point_cloud(np.concatenate([X_candidates,
                                                                 -self.candidates_y], 
                                                                axis=1),
                                                 'map')
@@ -73,6 +81,20 @@ class DataVisualizer(Node):
         self.get_logger().info('DataVisualizer node initialized')
 
     def timer_callback(self):
+        num_samples = self.get_parameter('num_samples').get_parameter_value().integer_value
+        # If the number of samples has changed, update the point cloud
+        if self.num_samples != num_samples:
+            self.get_logger().info(f'Updated Number of samples: {num_samples}')
+            self.num_samples = num_samples
+            X_candidates = ploygon2candidats(self.fence_vertices, 
+                                             num_samples=self.num_samples)
+            X_candidates = self.X_scaler.transform(X_candidates)
+            self.candidates_y = self.gpr_gt.predict_f(X_candidates)[0].numpy()
+            self.point_cloud_msg = self.point_cloud(np.concatenate([X_candidates,
+                                                                    -self.candidates_y], 
+                                                                   axis=1),
+                                                    'map')
+            
         self.pcd_publisher.publish(self.point_cloud_msg)
         self.get_logger().info('Published point cloud')
 

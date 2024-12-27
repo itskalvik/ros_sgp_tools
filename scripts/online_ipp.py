@@ -176,13 +176,19 @@ class OnlineIPP(Node):
             self.X_train.append([float(data[i].x), float(data[i].y)])
         self.X_train = np.array(self.X_train)
 
+        fence_vertices = request.data.fence_vertices
+        fence_vertices_array = []
+        for i in range(len(fence_vertices)):
+            fence_vertices_array.append([float(fence_vertices[i].x), float(fence_vertices[i].y)])
+        fence_vertices_array = np.array(fence_vertices_array)
+
         self.sampling_rate = request.data.sampling_rate
 
-        # Save candidates and sampling rate to data store
-        dset = self.data_file.create_dataset("candidates", 
-                                             self.X_train.shape, 
+        # Save fence_vertices and sampling rate to data store
+        dset = self.data_file.create_dataset("fence_vertices", 
+                                             fence_vertices_array.shape, 
                                              dtype=np.float32,
-                                             data=self.X_train)
+                                             data=fence_vertices_array)
         dset.attrs['sampling_rate'] = self.sampling_rate
 
         # Normalize the train set and waypoints
