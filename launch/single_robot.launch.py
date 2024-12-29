@@ -30,6 +30,7 @@ def generate_launch_description():
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
     fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
+    data_folder = get_var('DATA_FOLDER', '')
     
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
@@ -66,7 +67,8 @@ def generate_launch_description():
                           name='OnlineIPP',
                           parameters=[
                               {'data_type': data_type,
-                               'adaptive_ipp': adaptive_ipp
+                               'adaptive_ipp': adaptive_ipp,
+                               'data_folder': data_folder
                               }
                           ])
     nodes.append(online_planner)

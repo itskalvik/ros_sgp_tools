@@ -80,11 +80,11 @@ class offlineIPP(Node):
 
         # Get the data and normalize 
         self.fence_vertices, home_position = get_mission_plan(plan_fname)
-        self.X_train = ploygon2candidats(self.fence_vertices, num_samples=5000)
-        self.X_train = np.array(self.X_train).reshape(-1, 2)
+        self.X_candidates = ploygon2candidats(self.fence_vertices, num_samples=5000)
+        self.X_candidates = np.array(self.X_candidates).reshape(-1, 2)
         self.X_scaler = CustomStandardScaler()
-        self.X_scaler.fit(self.X_train)
-        self.X_train = self.X_scaler.transform(self.X_train)
+        self.X_scaler.fit(self.X_candidates)
+        self.X_candidates = self.X_scaler.transform(self.X_candidates)
 
         # Shift home position for each robot to avoid collision with other robots
         home_positions = []
@@ -109,7 +109,7 @@ class offlineIPP(Node):
 
         # Sample uniform random initial waypoints and compute initial paths
         # Sample one less waypoint per robot and add the home position as the first waypoint
-        Xu_init = get_inducing_pts(self.X_train, (self.num_waypoints-1)*self.num_robots)
+        Xu_init = get_inducing_pts(self.X_candidates, (self.num_waypoints-1)*self.num_robots)
         Xu_init, _ = run_tsp(Xu_init,
                              num_vehicles=self.num_robots,
                              resample=self.num_waypoints,
@@ -127,7 +127,7 @@ class offlineIPP(Node):
 
         # Initialize the SGP method and optimize the path
         IPP_model, _ = continuous_sgp(self.num_waypoints, 
-                                      self.X_train,
+                                      self.X_candidates,
                                       likelihood_variance,
                                       kernel,
                                       transform,
@@ -139,7 +139,7 @@ class offlineIPP(Node):
         self.waypoints = IPP_model.inducing_variable.Z.numpy().reshape(self.num_robots, 
                                                                        self.num_waypoints, -1)
         for i in range(self.num_robots):
-            self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_train)
+            self.waypoints[i] = project_waypoints(self.waypoints[i], self.X_candidates)
 
         # Upsample the path waypoints and partition the environment into seperate monitoring regions
         IPP_model.transform.sampling_rate = 30
@@ -173,12 +173,12 @@ class offlineIPP(Node):
         # Train KNN and get predictions
         neigh = KNeighborsClassifier(n_neighbors=3)
         neigh.fit(X, y)
-        y_pred = neigh.predict(self.X_train)
+        y_pred = neigh.predict(self.X_candidates)
 
         # Format data for transmission
         self.data = []
         for i in range(self.num_robots):
-            self.data.append(self.X_train[np.where(y_pred==i)[0]])
+            self.data.append(self.X_candidates[np.where(y_pred==i)[0]])
 
     '''
     Log generated paths and training sets
@@ -228,7 +228,7 @@ class offlineIPP(Node):
                 # Undo data normalization to map the coordinates to real world coordinates
                 train_pts = self.X_scaler.inverse_transform(np.array(train_pts))
                 for point in train_pts:
-                    request.data.x_train.append(Point(x=point[0],
+                    request.data.x_candidates.append(Point(x=point[0],
                                                       y=point[1]))
 
                 for point in self.fence_vertices:

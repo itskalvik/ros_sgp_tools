@@ -1,3 +1,4 @@
+import os
 from launch_ros.actions import Node
 from launch import LaunchDescription
 from launch.substitutions import PathJoinSubstitution
@@ -9,6 +10,12 @@ from launch.actions import GroupAction, IncludeLaunchDescription, DeclareLaunchA
 
 def generate_launch_description():
     nodes = []
+
+    # Data folder
+    try:
+        data_folder = os.environ['DATA_FOLDER']
+    except:
+        data_folder = ''
 
     # Mission log folder
     mision_log_arg = DeclareLaunchArgument('mission_log', default_value='',
@@ -25,7 +32,8 @@ def generate_launch_description():
                          executable='data_visualizer.py',
                          name='pcd_publisher',
                          parameters=[
-                            {'mission_log': LaunchConfiguration('mission_log'),
+                            {'data_folder': data_folder,
+                             'mission_log': LaunchConfiguration('mission_log'),
                              'num_samples': LaunchConfiguration('num_samples')}
                          ])
     nodes.append(pcd_publisher)

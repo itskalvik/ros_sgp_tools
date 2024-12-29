@@ -51,25 +51,6 @@ class OnlineIPP(Node):
         super().__init__('OnlineIPP')
         self.get_logger().info('Initializing')
 
-        # folder to save the waypoints
-        try:
-            self.data_folder = os.environ['DATA_FOLDER']
-        except:
-            self.data_folder = ''
-
-        time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
-        self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
-        if not os.path.exists(self.data_folder):
-            os.makedirs(self.data_folder)
-
-        qos_profile = QoSProfile(depth=10)  
-        
-        # setup variables
-        self.waypoints = None
-        self.data_X = []
-        self.data_y = []
-        self.current_waypoint = -1
-
         # Declare parameters
         self.declare_parameter('num_param_inducing', 40)
         self.num_param_inducing = self.get_parameter('num_param_inducing').get_parameter_value().integer_value
@@ -87,7 +68,15 @@ class OnlineIPP(Node):
         self.adaptive_ipp = self.get_parameter('adaptive_ipp').get_parameter_value().bool_value
         self.get_logger().info(f'Adaptive IPP: {self.adaptive_ipp}')
 
+        self.declare_parameter('data_folder', '')
+        self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
+        self.get_logger().info(f'Data Folder: {self.data_folder}')
+
         # Create sensor data h5py file
+        time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+        self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
+        if not os.path.exists(self.data_folder):
+            os.makedirs(self.data_folder)
         data_fname = os.path.join(self.data_folder, f'mission-log.hdf5')
         self.data_file = h5py.File(data_fname, "a")
         self.dset_X = self.data_file.create_dataset("X", (0, 2), 
@@ -99,6 +88,12 @@ class OnlineIPP(Node):
                                                     dtype=np.float32,
                                                     chunks=True)
 
+        # setup variables
+        self.waypoints = None
+        self.data_X = []
+        self.data_y = []
+        self.current_waypoint = -1
+        
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
                                        self.offlineIPP_service_callback)
@@ -126,7 +121,7 @@ class OnlineIPP(Node):
         self.create_subscription(Int32, 
                                  'current_waypoint', 
                                  self.current_waypoint_callback, 
-                                 qos_profile)
+                                 QoSProfile(depth=10))
 
         # Setup data subscribers
         sensors_module = importlib.import_module('sensors')
@@ -170,11 +165,11 @@ class OnlineIPP(Node):
         self.waypoints = np.array(self.waypoints)[:, :self.n_dim]
         self.num_waypoints = len(self.waypoints)
 
-        data = request.data.x_train
-        self.X_train = []
+        data = request.data.x_candidates
+        self.X_candidates = []
         for i in range(len(data)):
-            self.X_train.append([float(data[i].x), float(data[i].y)])
-        self.X_train = np.array(self.X_train)
+            self.X_candidates.append([float(data[i].x), float(data[i].y)])
+        self.X_candidates = np.array(self.X_candidates)
 
         fence_vertices = request.data.fence_vertices
         fence_vertices_array = []
@@ -193,8 +188,8 @@ class OnlineIPP(Node):
 
         # Normalize the train set and waypoints
         self.X_scaler = CustomStandardScaler()
-        self.X_scaler.fit(self.X_train)
-        self.X_train = self.X_scaler.transform(self.X_train)
+        self.X_scaler.fit(self.X_candidates)
+        self.X_candidates = self.X_scaler.transform(self.X_candidates)
         self.waypoints = self.X_scaler.transform(np.array(self.waypoints))
     
         response.success = True
@@ -213,7 +208,7 @@ class OnlineIPP(Node):
                                       sampling_rate=self.sampling_rate,
                                       num_robots=1)
         self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
-                                           self.X_train,
+                                           self.X_candidates,
                                            likelihood_variance,
                                            kernel,
                                            self.transform,
@@ -221,7 +216,7 @@ class OnlineIPP(Node):
                                            Xu_init=self.waypoints)
         
         # Initialize the OSGPR model
-        self.param_model = init_osgpr(self.X_train, 
+        self.param_model = init_osgpr(self.X_candidates, 
                                       num_inducing=self.num_param_inducing, 
                                       lengthscales=lengthscales, 
                                       variance=variance, 
@@ -292,7 +287,7 @@ class OnlineIPP(Node):
         plt.gca().set_aspect('equal')
         plt.xlabel('X')
         plt.xlabel('Y')
-        plt.scatter(self.X_train[:, 0], self.X_train[:, 1], 
+        plt.scatter(self.X_candidates[:, 0], self.X_candidates[:, 1], 
                     marker='.', s=1, label='Candidates')
         plt.plot(waypoints[:, 0], waypoints[:, 1], 
                  label='Path', marker='o', c='r')
@@ -358,7 +353,7 @@ class OnlineIPP(Node):
         self.waypoints = self.IPP_model.inducing_variable.Z
         self.waypoints = self.IPP_model.transform.expand(self.waypoints,
                                                          expand_sensor_model=False).numpy()
-        self.waypoints = project_waypoints(self.waypoints, self.X_train)
+        self.waypoints = project_waypoints(self.waypoints, self.X_candidates)
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
@@ -368,8 +363,9 @@ class OnlineIPP(Node):
                        trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='scipy')
 
-        self.get_logger().info(f'SSGP Kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
-        self.get_logger().info(f'SSGP Kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
+        self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
+        self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
+        self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
 
 
 if __name__ == '__main__':
