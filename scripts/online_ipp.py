@@ -3,6 +3,7 @@
 import os
 import h5py
 import importlib
+from threading import Lock
 
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -16,6 +17,7 @@ from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
+from sgptools.utils.gpflow import get_model_params
 from utils import CustomStandardScaler
 
 from ros_sgp_tools.srv import Waypoints, IPP
@@ -30,6 +32,9 @@ from message_filters import ApproximateTimeSynchronizer
 import tensorflow as tf
 tf.random.set_seed(2024)
 np.random.seed(2024)
+
+from sensor_msgs.msg import PointCloud2
+from utils import point_cloud
 
 
 class OnlineIPP(Node):
@@ -72,6 +77,10 @@ class OnlineIPP(Node):
         self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
         self.get_logger().info(f'Data Folder: {self.data_folder}')
 
+        self.declare_parameter('visualize', False)
+        self.visualize = self.get_parameter('visualize').get_parameter_value().bool_value
+        self.get_logger().info(f'Visualize: {self.visualize}')
+
         # Create sensor data h5py file
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
@@ -93,6 +102,7 @@ class OnlineIPP(Node):
         self.data_X = []
         self.data_y = []
         self.current_waypoint = -1
+        self.lock = Lock()
         
         # Setup the service to receive the waypoints and X_train data
         self.srv = self.create_service(IPP, 'offlineIPP', 
@@ -116,6 +126,10 @@ class OnlineIPP(Node):
         if not self.adaptive_ipp:
             self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
             rclpy.shutdown()
+
+        # Create a publisher to publish the point cloud
+        if self.visualize:
+            self.pcd_publisher = self.create_publisher(PointCloud2, 'pcd', 10)
 
         # Setup the subscribers
         self.create_subscription(Int32, 
@@ -222,7 +236,6 @@ class OnlineIPP(Node):
                                       variance=variance, 
                                       noise_variance=likelihood_variance)
 
-
     '''
     Callback to get the current waypoint and shutdown the node once the mission ends
     '''
@@ -243,9 +256,11 @@ class OnlineIPP(Node):
                 # position data is used by only a few sensors
                 data_X, data_y = self.sensors[1].process_msg(args[1], 
                                                              position=position)
-                
+
+            self.lock.acquire()
             self.data_X.extend(data_X)
             self.data_y.extend(data_y)
+            self.lock.release()
 
     def sync_waypoints(self):
         # Send the new waypoints to the mission planner and 
@@ -275,7 +290,8 @@ class OnlineIPP(Node):
         waypoints = np.array(self.waypoints)
         current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
 
-        dset = self.data_file.create_dataset(f"waypoints-{current_waypoint}", 
+        fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
+        dset = self.data_file.create_dataset(fname,
                                              waypoints.shape, 
                                              dtype=np.float32,
                                              data=self.X_scaler.inverse_transform(waypoints))
@@ -295,7 +311,7 @@ class OnlineIPP(Node):
                     label='Update Waypoint', zorder=2, c='g')
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
-                                 f'waypoints-({current_waypoint}).png'),
+                                 f'{fname}.png'),
                                  bbox_inches='tight')
         plt.close()
 
@@ -307,13 +323,14 @@ class OnlineIPP(Node):
 
             start_time = self.get_clock().now().to_msg().sec
 
-            # Make local copies of the data
+
+            # Make local copies of the data and clear the data buffers         
+            self.lock.acquire()
             data_X = np.array(self.data_X).reshape(-1, 2)
             data_y = np.array(self.data_y).reshape(-1, 1)
-
-            # Empty global data buffers
             self.data_X = []
             self.data_y = []
+            self.lock.release()
 
             # Update the parameters and the waypoints after 
             # the current waypoint the robot is heading to
@@ -333,6 +350,18 @@ class OnlineIPP(Node):
 
             self.dset_y.resize(self.dset_y.shape[0]+len(data_y), axis=0)   
             self.dset_y[-len(data_y):] = data_y
+
+            if self.visualize:
+                self.publish_point_cloud()
+
+    def publish_point_cloud(self):
+        candidates_y = self.param_model.predict_f(self.X_candidates.astype(np.float64))[0].numpy()
+        point_cloud_msg = point_cloud(np.concatenate([self.X_candidates,
+                                                      -candidates_y], 
+                                                      axis=1),
+                                      'map')
+        self.pcd_publisher.publish(point_cloud_msg)
+        self.get_logger().info('Published point cloud')
 
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""

@@ -1,10 +1,13 @@
 import utm
 import json
 import numpy as np
-from std_msgs.msg import Header
 from sklearn.preprocessing import StandardScaler
-from sensor_msgs.msg import PointCloud2, PointField
 
+try:
+    from std_msgs.msg import Header
+    from sensor_msgs.msg import PointCloud2, PointField
+except ImportError:
+    pass
 
 # Extract geofence and home location from QGC plan file
 def get_mission_plan(fname):
