@@ -368,7 +368,7 @@ class OnlineIPP(Node):
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
         # Get the new inducing points for the path
-        self.param_model.update((X_new, y_new))
+        self.param_model.update((X_new, y_new), update_inducing=False)
         optimize_model(self.param_model,
                        trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='scipy')
