@@ -69,7 +69,6 @@ def generate_launch_description():
                               {'data_type': data_type,
                                'adaptive_ipp': adaptive_ipp,
                                'data_folder': data_folder,
-                               'visualize': start_foxglove
                               }
                           ])
     nodes.append(online_planner)

@@ -33,9 +33,6 @@ import tensorflow as tf
 tf.random.set_seed(2024)
 np.random.seed(2024)
 
-from sensor_msgs.msg import PointCloud2
-from utils import point_cloud
-
 
 class OnlineIPP(Node):
     """
@@ -126,10 +123,6 @@ class OnlineIPP(Node):
         if not self.adaptive_ipp:
             self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
             rclpy.shutdown()
-
-        # Create a publisher to publish the point cloud
-        if self.visualize:
-            self.pcd_publisher = self.create_publisher(PointCloud2, 'pcd', 10)
 
         # Setup the subscribers
         self.create_subscription(Int32, 
@@ -350,19 +343,7 @@ class OnlineIPP(Node):
 
             self.dset_y.resize(self.dset_y.shape[0]+len(data_y), axis=0)   
             self.dset_y[-len(data_y):] = data_y
-
-            if self.visualize:
-                self.publish_point_cloud()
-
-    def publish_point_cloud(self):
-        candidates_y = self.param_model.predict_f(self.X_candidates.astype(np.float64))[0].numpy()
-        point_cloud_msg = point_cloud(np.concatenate([self.X_candidates,
-                                                      -candidates_y], 
-                                                      axis=1),
-                                      'map')
-        self.pcd_publisher.publish(point_cloud_msg)
-        self.get_logger().info('Published point cloud')
-
+            
     def update_waypoints(self, current_waypoint):
         """Update the IPP solution."""
 
