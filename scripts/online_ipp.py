@@ -17,7 +17,7 @@ from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
-from sgptools.utils.gpflow import get_model_params
+from sgptools.utils.tsp import resample_path
 from utils import CustomStandardScaler
 
 from ros_sgp_tools.srv import Waypoints, IPP
@@ -117,7 +117,8 @@ class OnlineIPP(Node):
         self.init_sgp_models()
         
         # Sync the waypoints with the mission planner
-        self.sync_waypoints()
+        waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
+        self.sync_waypoints(waypoints)
         self.get_logger().info('Initial waypoints synced with the mission planner')
 
         if not self.adaptive_ipp:
@@ -255,7 +256,7 @@ class OnlineIPP(Node):
             self.data_y.extend(data_y)
             self.lock.release()
 
-    def sync_waypoints(self):
+    def sync_waypoints(self, waypoints):
         # Send the new waypoints to the mission planner and 
         # update the current waypoint from the service
         
@@ -266,9 +267,6 @@ class OnlineIPP(Node):
         while not waypoints_service.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(f'{service} service not avaliable, waiting...')
 
-        # Undo data normalization to map the coordinates to real world coordinates
-        waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
-        self.plot_paths(waypoints)
         for waypoint in waypoints:
             z = waypoint[2] if self.use_altitude else 20.0
             request.waypoints.waypoints.append(Point(x=waypoint[0],
@@ -279,8 +277,7 @@ class OnlineIPP(Node):
         while future.result() is not None:
             rclpy.spin_once(self, timeout_sec=0.5)
 
-    def plot_paths(self, waypoints):
-        waypoints = np.array(self.waypoints)
+    def plot_paths(self, waypoints, X_data, pts_ind):
         current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
 
         fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
@@ -302,6 +299,12 @@ class OnlineIPP(Node):
                  label='Path', marker='o', c='r')
         plt.scatter(waypoints[current_waypoint, 0], waypoints[current_waypoint, 1],
                     label='Update Waypoint', zorder=2, c='g')
+        
+        plt.scatter(X_data[:, 0], X_data[:, 1], 
+                    label='Data', c='b', marker='x', zorder=3)
+        plt.scatter(pts_ind[:, 0], pts_ind[:, 1], 
+                    label='Pts', marker='.', c='r', zorder=4)
+
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
                                  f'{fname}.png'),
@@ -328,27 +331,33 @@ class OnlineIPP(Node):
             # Update the parameters and the waypoints after 
             # the current waypoint the robot is heading to
             self.update_param(self.X_scaler.transform(data_X), data_y)
-            self.update_waypoints(self.current_waypoint)
+            self.update_waypoints()
 
             # Sync the waypoints with the mission planner
-            self.sync_waypoints()
+            waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
+            self.sync_waypoints(waypoints)
 
             end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info('Updated waypoints synced with the mission planner')
             self.get_logger().info(f'Update time: {end_time-start_time} secs')
 
             # Dump data to data store
+            pts_ind = self.param_model.inducing_variable.Z.numpy()
+            self.plot_paths(np.array(self.waypoints), 
+                            self.X_scaler.transform(data_X), 
+                            pts_ind)
+
             self.dset_X.resize(self.dset_X.shape[0]+len(data_X), axis=0)   
             self.dset_X[-len(data_X):] = data_X
 
             self.dset_y.resize(self.dset_y.shape[0]+len(data_y), axis=0)   
             self.dset_y[-len(data_y):] = data_y
             
-    def update_waypoints(self, current_waypoint):
+    def update_waypoints(self):
         """Update the IPP solution."""
 
         # Freeze the visited inducing points
-        Xu_visited = self.waypoints.copy()[:current_waypoint]
+        Xu_visited = self.waypoints.copy()[:self.current_waypoint]
         Xu_visited = np.array(Xu_visited).reshape(1, -1, self.n_dim)
         self.IPP_model.transform.update_Xu_fixed(Xu_visited)
 
@@ -360,15 +369,23 @@ class OnlineIPP(Node):
                        optimizer='scipy',
                        method='CG')
 
-        self.waypoints = self.IPP_model.inducing_variable.Z
-        self.waypoints = self.IPP_model.transform.expand(self.waypoints,
-                                                         expand_sensor_model=False).numpy()
-        self.waypoints = project_waypoints(self.waypoints, self.X_candidates)
+        waypoints = self.IPP_model.inducing_variable.Z
+        waypoints = self.IPP_model.transform.expand(waypoints,
+                                                    expand_sensor_model=False).numpy()
+        waypoints = project_waypoints(waypoints, self.X_candidates)
+        self.waypoints = waypoints
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
-        # Get the new inducing points for the path
-        self.param_model.update((X_new, y_new), update_inducing=False)
+        # Set the incucing points to be along the traversed path
+        inducing_variable = self.waypoints[:self.current_waypoint]
+        # Ensure inducing points do not extend beyond the collected data
+        inducing_variable[-1] = X_new[-1]
+        # Resample the path to the number of inducing points
+        inducing_variable = resample_path(inducing_variable, 
+                                          self.num_param_inducing)
+        self.param_model.update((X_new, y_new), 
+                                inducing_variable=inducing_variable)
         optimize_model(self.param_model,
                        trainable_variables=self.param_model.trainable_variables[1:], 
                        optimizer='scipy')

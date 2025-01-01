@@ -5,11 +5,13 @@ from geographic_msgs.msg import GeoPoseStamped
 from pygeodesy.geoids import GeoidPGM
 from sensor_msgs.msg import NavSatFix
 from mavros_msgs.msg import State
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 import rclpy
 
 import numpy as np
 from time import sleep
+from collections import deque
 
 _egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
@@ -37,6 +39,9 @@ class MissionPlanner(Node):
         self.vehicle_pose_subscriber = self.create_subscription(
             NavSatFix, 'mavros/global_position/global', 
             self.vehicle_position_callback, SENSOR_QOS)
+        self.vehicle_odom_subscriber = self.create_subscription(
+            Odometry, 'mavros/local_position/odom',
+            self.vehicle_odom_callback, SENSOR_QOS)
             
         # Create publishers
         self.setpoint_position_publisher = self.create_publisher(
@@ -59,22 +64,53 @@ class MissionPlanner(Node):
         self.set_mode_request = SetMode.Request()
         self.setpoint_position = GeoPoseStamped()
         self.vehicle_position = np.array([0., 0., 0.])
+        self.velocity = 0.01
+        self.velocity_buffer = deque([0.01])
+        self.waypoint_distance = -1
 
         # Wait to get the state of the vehicle
         rclpy.spin_once(self, timeout_sec=5.0)
 
-    def at_waypoint(self, waypoint, xy_tolerance=0.000007, z_tolerance=0.3):
+    def haversine(self, pt1, pt2):
+        """
+        Calculate the great circle distance between two points
+        on the earth (specified in decimal degrees)
+        https://stackoverflow.com/a/29546836
+        """
+        lon1, lat1 = pt1[:, 0], pt1[:, 1]
+        lon2, lat2 = pt2[:, 0], pt2[:, 1]
+        lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = np.sin(dlat/2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2.0)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        m = 6378.137 * c * 1000
+        return m
+
+    def at_waypoint(self, waypoint, xy_tolerance=0.7, z_tolerance=0.3):
         """Check if the vehicle is at the waypoint."""
-        xy_dist = np.linalg.norm(self.vehicle_position[:2] - waypoint[:2])
+        self.waypoint_distance = self.haversine(self.vehicle_position[:2].reshape(1, -1), 
+                                                np.array(waypoint[:2]).reshape(1, -1))[0]
         if self.use_altitude:
             z_dist = np.abs(self.vehicle_position[2] - waypoint[2])
         else: 
             z_dist = 0.0
 
-        if xy_dist < xy_tolerance and z_dist < z_tolerance:
+        if self.waypoint_distance < xy_tolerance and z_dist < z_tolerance:
             return True
         else:
             return False
+        
+    def vehicle_odom_callback(self, msg):
+        """Callback function for vehicle odom topic subscriber.
+        Computes nominal linear velocity"""
+        velocity = np.hypot(msg.twist.twist.linear.x,
+                                 msg.twist.twist.linear.y)
+        if len(self.velocity_buffer) > 50:
+            self.velocity_buffer.popleft()
+        if velocity > 0.2:
+            self.velocity_buffer.append(velocity)
+        self.velocity = np.mean(self.velocity_buffer)
 
     def vehicle_state_callback(self, vehicle_state):
         """Callback function for vehicle_state topic subscriber."""
