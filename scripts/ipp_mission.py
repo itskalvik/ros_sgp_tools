@@ -54,7 +54,7 @@ class IPPMissionPlanner(MissionPlanner):
         return response
     
     def publish_eta(self):
-        idx = self.eta_msg.current_waypoint-1
+        idx = self.eta_msg.current_waypoint
         self.distances[idx] = self.waypoint_distance
         waypoints_eta = self.distances/self.velocity
         self.eta_msg.eta = []
@@ -84,7 +84,7 @@ class IPPMissionPlanner(MissionPlanner):
                 self.get_logger().info('Takeoff complete')
 
         for i in range(len(self.waypoints)):
-            self.eta_msg.current_waypoint = i+1
+            self.eta_msg.current_waypoint = i
             self.get_logger().info(f'Visiting waypoint {i}: {self.waypoints[i]}')
             if self.go2waypoint([self.waypoints[i][0],
                                  self.waypoints[i][1],

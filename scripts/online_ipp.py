@@ -22,7 +22,7 @@ from utils import CustomStandardScaler
 
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
-from std_msgs.msg import Int32
+from ros_sgp_tools.msg import ETA
 
 import rclpy
 from rclpy.node import Node
@@ -126,9 +126,8 @@ class OnlineIPP(Node):
             rclpy.shutdown()
 
         # Setup the subscribers
-        self.create_subscription(Int32, 
-                                 'current_waypoint', 
-                                 self.current_waypoint_callback, 
+        self.create_subscription(ETA, 'eta', 
+                                 self.eta_callback, 
                                  QoSProfile(depth=10))
 
         # Setup data subscribers
@@ -233,15 +232,16 @@ class OnlineIPP(Node):
     '''
     Callback to get the current waypoint and shutdown the node once the mission ends
     '''
-    def current_waypoint_callback(self, msg):
-        if msg.data == self.num_waypoints:
+    def eta_callback(self, msg):
+        self.current_waypoint = msg.current_waypoint
+        self.eta = msg.eta
+        if self.current_waypoint-1 == self.num_waypoints:
             self.get_logger().info('Mission complete')
             rclpy.shutdown()
-        self.current_waypoint = msg.data
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
-        if self.current_waypoint > 1 and self.current_waypoint != self.num_waypoints:
+        if self.current_waypoint > 0 and self.current_waypoint != self.num_waypoints:
             position = self.sensors[0].process_msg(args[0])
             if len(args) == 1:
                 data_X = [position[:2]]
@@ -317,9 +317,6 @@ class OnlineIPP(Node):
         if len(self.data_X) > self.buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
-            start_time = self.get_clock().now().to_msg().sec
-
-
             # Make local copies of the data and clear the data buffers         
             self.lock.acquire()
             data_X = np.array(self.data_X).reshape(-1, 2)
@@ -330,16 +327,21 @@ class OnlineIPP(Node):
 
             # Update the parameters and the waypoints after 
             # the current waypoint the robot is heading to
+            start_time = self.get_clock().now().to_msg().sec
             self.update_param(self.X_scaler.transform(data_X), data_y)
+            end_time = self.get_clock().now().to_msg().sec
+            self.get_logger().info(f'Param update time: {end_time-start_time} secs')
+
+            start_time = self.get_clock().now().to_msg().sec
             self.update_waypoints()
+            end_time = self.get_clock().now().to_msg().sec
+            self.get_logger().info(f'IPP update time: {end_time-start_time} secs')
 
             # Sync the waypoints with the mission planner
             waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
             self.sync_waypoints(waypoints)
 
-            end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info('Updated waypoints synced with the mission planner')
-            self.get_logger().info(f'Update time: {end_time-start_time} secs')
 
             # Dump data to data store
             pts_ind = self.param_model.inducing_variable.Z.numpy()
@@ -357,7 +359,7 @@ class OnlineIPP(Node):
         """Update the IPP solution."""
 
         # Freeze the visited inducing points
-        Xu_visited = self.waypoints.copy()[:self.current_waypoint]
+        Xu_visited = self.waypoints.copy()[:self.current_waypoint+2]
         Xu_visited = np.array(Xu_visited).reshape(1, -1, self.n_dim)
         self.IPP_model.transform.update_Xu_fixed(Xu_visited)
 
@@ -378,7 +380,7 @@ class OnlineIPP(Node):
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
         # Set the incucing points to be along the traversed path
-        inducing_variable = self.waypoints[:self.current_waypoint]
+        inducing_variable = self.waypoints[:self.current_waypoint+1]
         # Ensure inducing points do not extend beyond the collected data
         inducing_variable[-1] = X_new[-1]
         # Resample the path to the number of inducing points
