@@ -310,7 +310,7 @@ class OnlineIPP(Node):
                 # Update the waypoints only if the mission planner accepts the new waypoints
                 if self.waypoint_response.success:
                     self.waypoints = new_waypoints
-                            
+
             # Dump data to data store
             self.dset_X.resize(self.dset_X.shape[0]+len(data_X), axis=0)   
             self.dset_X[-len(data_X):] = data_X
@@ -332,8 +332,7 @@ class OnlineIPP(Node):
 
             self.plot_paths(fname, self.waypoints,
                             self.X_scaler.transform(data_X),
-                            self.param_model.inducing_variable.Z.numpy(),
-                            update_waypoint)
+                            update_waypoint=update_waypoint)
 
             if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
                 self.get_logger().info('Finished mission, shutting down online planner')
@@ -400,7 +399,7 @@ class OnlineIPP(Node):
         return -1
 
     def plot_paths(self, fname, waypoints, 
-                   X_data=None, pts_ind=None, 
+                   X_data=None, inducing_pts=None, 
                    update_waypoint=None):
         plt.figure()
         plt.gca().set_aspect('equal')
@@ -419,9 +418,9 @@ class OnlineIPP(Node):
             plt.scatter(X_data[:, 0], X_data[:, 1], 
                         label='Data', c='b', marker='x', zorder=3, s=1)
             
-        if pts_ind is not None:
-            plt.scatter(pts_ind[:, 0], pts_ind[:, 1], 
-                        label='Pts', marker='.', c='g', zorder=4, s=2)
+        if inducing_pts is not None:
+            plt.scatter(inducing_pts[:, 0], inducing_pts[:, 1], 
+                        label='Inducing Pts', marker='.', c='g', zorder=4, s=2)
 
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
