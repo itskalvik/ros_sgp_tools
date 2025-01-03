@@ -117,7 +117,7 @@ class OnlineIPP(Node):
         
         # Sync the waypoints with the mission planner
         self.waypoints_service = self.create_client(Waypoints, 'waypoints')
-        waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
+        waypoints = self.X_scaler.inverse_transform(self.waypoints)
         self.sync_waypoints(waypoints)
         self.get_logger().info('Initial waypoints synced with the mission planner')
 
@@ -201,7 +201,7 @@ class OnlineIPP(Node):
         self.X_scaler = CustomStandardScaler()
         self.X_scaler.fit(self.X_candidates)
         self.X_candidates = self.X_scaler.transform(self.X_candidates)
-        self.waypoints = self.X_scaler.transform(np.array(self.waypoints))
+        self.waypoints = self.X_scaler.transform(self.waypoints)
     
         response.success = True
         return response
@@ -279,41 +279,6 @@ class OnlineIPP(Node):
     def save_future_response(self, future):
         self.waypoint_response = future.result()
 
-    def plot_paths(self, waypoints, X_data, pts_ind, update_waypoint):
-        current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
-
-        fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
-        dset = self.data_file.create_dataset(fname,
-                                             waypoints.shape, 
-                                             dtype=np.float32,
-                                             data=self.X_scaler.inverse_transform(waypoints))
-        dset.attrs['lengthscales'] = self.param_model.kernel.lengthscales.numpy()
-        dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
-        dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
-        dset.attrs['update_waypoint'] = update_waypoint
-
-        plt.figure()
-        plt.gca().set_aspect('equal')
-        plt.xlabel('X')
-        plt.xlabel('Y')
-        plt.scatter(self.X_candidates[:, 0], self.X_candidates[:, 1], 
-                    marker='.', s=1, label='Candidates')
-        plt.plot(waypoints[:, 0], waypoints[:, 1], 
-                 label='Path', marker='o', c='r')
-        plt.scatter(waypoints[update_waypoint, 0], waypoints[update_waypoint, 1],
-                    label='Update Waypoint', zorder=2, c='g')
-        
-        plt.scatter(X_data[:, 0], X_data[:, 1], 
-                    label='Data', c='b', marker='x', zorder=3, s=1)
-        plt.scatter(pts_ind[:, 0], pts_ind[:, 1], 
-                    label='Pts', marker='.', c='g', zorder=4, s=2)
-
-        plt.legend()
-        plt.savefig(os.path.join(self.data_folder, 
-                                 f'{fname}.png'),
-                                 bbox_inches='tight')
-        plt.close()
-
     def update_with_data(self, force_update=False):
         # Update the hyperparameters and waypoints if the buffer is full 
         # or if force_update is True and atleast num_param_inducing data points are available
@@ -328,17 +293,18 @@ class OnlineIPP(Node):
             self.data_y = []
             self.lock.release()
 
-            # Update the parameters and the waypoints after 
-            # the current waypoint the robot is heading to
+            # Update the parameters
             start_time = self.get_clock().now().to_msg().sec
             self.update_param(self.X_scaler.transform(data_X), data_y)
             end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info(f'Param update time: {end_time-start_time} secs')
+            # Store the initial IPP runtime estimate
             if self.runtime_est is None: 
                 self.runtime_est = end_time-start_time
 
+            # Update the waypoints
             start_time = self.get_clock().now().to_msg().sec
-            update_waypoint = self.update_waypoints()
+            new_waypoints, update_waypoint = self.update_waypoints()
             end_time = self.get_clock().now().to_msg().sec
             runtime = end_time-start_time
             self.get_logger().info(f'IPP update time: {runtime} secs')
@@ -347,33 +313,50 @@ class OnlineIPP(Node):
                 self.runtime_est = runtime
 
             # Sync the waypoints with the mission planner
-            waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
-            self.sync_waypoints(waypoints)
-            while self.waypoint_response is None:
-                time.sleep(0.1)
+            if update_waypoint != -1:
+                lat_lon_waypoints = self.X_scaler.inverse_transform(new_waypoints)
+                self.sync_waypoints(lat_lon_waypoints)
+                while self.waypoint_response is None:
+                    time.sleep(0.1)
 
-            if self.waypoint_response.success:
-                self.get_logger().info(f'Updated waypoints synced with the mission planner')
-
-                pts_ind = self.param_model.inducing_variable.Z.numpy()
-                self.plot_paths(np.array(self.waypoints), 
-                                self.X_scaler.transform(data_X), 
-                                pts_ind, update_waypoint)
-            
+                # Update the waypoints only if the mission planner accepts the new waypoints
+                if self.waypoint_response.success:
+                    self.waypoints = new_waypoints
+                            
             # Dump data to data store
             self.dset_X.resize(self.dset_X.shape[0]+len(data_X), axis=0)   
             self.dset_X[-len(data_X):] = data_X
 
             self.dset_y.resize(self.dset_y.shape[0]+len(data_y), axis=0)   
             self.dset_y[-len(data_y):] = data_y
+
+            current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
+            fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
+            if update_waypoint != -1:
+                dset = self.data_file.create_dataset(fname,
+                                                    self.waypoints.shape, 
+                                                    dtype=np.float32,
+                                                    data=lat_lon_waypoints)
+                dset.attrs['lengthscales'] = self.param_model.kernel.lengthscales.numpy()
+                dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
+                dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
+                dset.attrs['update_waypoint'] = update_waypoint
             
+            self.plot_paths(fname, self.waypoints,
+                            self.X_scaler.transform(data_X),
+                            self.param_model.inducing_variable.Z.numpy(),
+                            update_waypoint)
+
     def update_waypoints(self):
         """Update the IPP solution."""
 
         # Freeze the visited inducing points
         update_waypoint = self.get_update_waypoint()
-        Xu_visited = self.waypoints.copy()[:update_waypoint]
-        Xu_visited = np.array(Xu_visited).reshape(1, -1, self.n_dim)
+        if update_waypoint == -1:
+            return self.waypoints, update_waypoint
+        
+        Xu_visited = self.waypoints[:update_waypoint+1]
+        Xu_visited = Xu_visited.reshape(1, -1, self.n_dim)
         self.IPP_model.transform.update_Xu_fixed(Xu_visited)
 
         # Get the new inducing points for the path
@@ -386,15 +369,17 @@ class OnlineIPP(Node):
 
         waypoints = self.IPP_model.inducing_variable.Z
         waypoints = self.IPP_model.transform.expand(waypoints,
-                                                    expand_sensor_model=False).numpy()
-        waypoints = project_waypoints(waypoints, self.X_candidates)
-        self.new_waypoints = waypoints
-        return update_waypoint
+                                                    expand_sensor_model=False)
+        # Might move waypoints before the current waypoint (reset to avoid update rejection)
+        waypoints = project_waypoints(waypoints.numpy(), self.X_candidates)
+        waypoints[:update_waypoint+1] = self.waypoints[:update_waypoint+1]
+
+        return waypoints, update_waypoint
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
         # Set the incucing points to be along the traversed path
-        inducing_variable = self.waypoints[:self.current_waypoint]
+        inducing_variable = np.copy(self.waypoints[:self.current_waypoint+1])
         # Ensure inducing points do not extend beyond the collected data
         inducing_variable[-1] = X_new[-1]
         # Resample the path to the number of inducing points
@@ -417,6 +402,37 @@ class OnlineIPP(Node):
             if self.eta[i] > self.runtime_est:
                 # Map path edge idx to waypoint index
                 return i+1
+        return -1
+
+    def plot_paths(self, fname, waypoints, 
+                   X_data=None, pts_ind=None, 
+                   update_waypoint=None):
+        plt.figure()
+        plt.gca().set_aspect('equal')
+        plt.xlabel('X')
+        plt.xlabel('Y')
+        plt.scatter(self.X_candidates[:, 0], self.X_candidates[:, 1], 
+                    marker='.', s=1, label='Candidates')
+        plt.plot(waypoints[:, 0], waypoints[:, 1], 
+                 label='Path', marker='o', c='r')
+        
+        if update_waypoint is not None:
+            plt.scatter(waypoints[update_waypoint, 0], waypoints[update_waypoint, 1],
+                        label='Update Waypoint', zorder=2, c='g')
+        
+        if X_data is not None:
+            plt.scatter(X_data[:, 0], X_data[:, 1], 
+                        label='Data', c='b', marker='x', zorder=3, s=1)
+            
+        if pts_ind is not None:
+            plt.scatter(pts_ind[:, 0], pts_ind[:, 1], 
+                        label='Pts', marker='.', c='g', zorder=4, s=2)
+
+        plt.legend()
+        plt.savefig(os.path.join(self.data_folder, 
+                                 f'{fname}.png'),
+                                 bbox_inches='tight')
+        plt.close()
 
 
 if __name__ == '__main__':
