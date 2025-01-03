@@ -27,6 +27,7 @@ def generate_launch_description():
     data_type = get_var('DATA_TYPE' ,'SerialPing2')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
+    data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 100))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
     fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
@@ -43,6 +44,7 @@ def generate_launch_description():
     print(f"DATA_TYPE: {data_type}")
     print(f"NUM_WAYPOINTS: {num_waypoints}")
     print(f"SAMPLING_RATE: {sampling_rate}")
+    print(f"DATA_BUFFER_SIZE: {data_buffer_size}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
     print(f"START_FOXGLOVE: {start_foxglove}")
     print(f"FAKE_DATA: {fake_data}\n")
@@ -69,6 +71,7 @@ def generate_launch_description():
                               {'data_type': data_type,
                                'adaptive_ipp': adaptive_ipp,
                                'data_folder': data_folder,
+                               'data_buffer_size': data_buffer_size
                               }
                           ])
     nodes.append(online_planner)

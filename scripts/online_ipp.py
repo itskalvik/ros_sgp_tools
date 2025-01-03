@@ -37,18 +37,7 @@ np.random.seed(2024)
 
 class OnlineIPP(Node):
     """
-    Class to create an online IPP mission.
-
-    Note: Make sure the number of waypoints is small enough so that 
-    the parameters update and waypoints updates are fast enough to 
-    reach the robot before it reaches the next waypoint.
-
-    Args:
-        num_param_inducing (int): The number of inducing points for the OSGPR model.
-        buffer_size (int): The size of the buffers to store the sensor data.
-        data_type (str): The type of sensor data to use for kernel parameter updates.
-                         Any class name from sensors.py is a valid option.
-                         Currently supports: AltitudeData, SonarData, and PressureData.
+    Online IPP mission planner
     """
     def __init__(self):
         super().__init__('OnlineIPP')
@@ -59,9 +48,9 @@ class OnlineIPP(Node):
         self.num_param_inducing = self.get_parameter('num_param_inducing').get_parameter_value().integer_value
         self.get_logger().info(f'Num Param Inducing: {self.num_param_inducing}')
 
-        self.declare_parameter('buffer_size', 100)
-        self.buffer_size = self.get_parameter('buffer_size').get_parameter_value().integer_value
-        self.get_logger().info(f'Data Buffer Size: {self.buffer_size}')
+        self.declare_parameter('data_buffer_size', 100)
+        self.data_buffer_size = self.get_parameter('data_buffer_size').get_parameter_value().integer_value
+        self.get_logger().info(f'Data Buffer Size: {self.data_buffer_size}')
 
         self.declare_parameter('data_type', 'Altitude')
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
@@ -119,8 +108,10 @@ class OnlineIPP(Node):
         self.waypoints_service = self.create_client(Waypoints, 'waypoints')
         waypoints = self.X_scaler.inverse_transform(self.waypoints)
         self.sync_waypoints(waypoints)
+        fname = f"waypoints_0-{strftime('%H-%M-%S', gmtime())}"
+        self.plot_paths(fname, self.waypoints, update_waypoint=0)
         self.get_logger().info('Initial waypoints synced with the mission planner')
-
+        
         if not self.adaptive_ipp:
             self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
             rclpy.shutdown()
@@ -239,9 +230,6 @@ class OnlineIPP(Node):
     def eta_callback(self, msg):
         self.current_waypoint = msg.current_waypoint
         self.eta = msg.eta
-        if self.current_waypoint-1 == self.num_waypoints:
-            self.get_logger().info('Mission complete')
-            rclpy.shutdown()
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
@@ -282,7 +270,7 @@ class OnlineIPP(Node):
     def update_with_data(self, force_update=False):
         # Update the hyperparameters and waypoints if the buffer is full 
         # or if force_update is True and atleast num_param_inducing data points are available
-        if len(self.data_X) > self.buffer_size or \
+        if len(self.data_X) > self.data_buffer_size or \
             (force_update and len(self.data_X) > self.num_param_inducing):
 
             # Make local copies of the data and clear the data buffers         
@@ -341,7 +329,11 @@ class OnlineIPP(Node):
                 dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
                 dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
                 dset.attrs['update_waypoint'] = update_waypoint
-            
+
+            if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
+                self.get_logger().info('Finished mission, shutting down online planner')
+                rclpy.shutdown()
+
             self.plot_paths(fname, self.waypoints,
                             self.X_scaler.transform(data_X),
                             self.param_model.inducing_variable.Z.numpy(),
@@ -378,6 +370,9 @@ class OnlineIPP(Node):
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
+        if self.current_waypoint >= self.num_waypoints-1:
+            return
+        
         # Set the incucing points to be along the traversed path
         inducing_variable = np.copy(self.waypoints[:self.current_waypoint+1])
         # Ensure inducing points do not extend beyond the collected data
