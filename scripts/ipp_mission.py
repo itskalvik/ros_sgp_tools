@@ -33,7 +33,7 @@ class IPPMissionPlanner(MissionPlanner):
 
         self.distances = self.haversine(self.waypoints[1:], 
                                         self.waypoints[:-1])
-        
+
         # Setup timers
         self.eta_timer = self.create_timer(1, self.publish_eta)
 
@@ -41,20 +41,34 @@ class IPPMissionPlanner(MissionPlanner):
         self.mission()
 
     def waypoint_service_callback(self, request, response):
-        waypoints = request.waypoints.waypoints
+        waypoints_msg = request.waypoints.waypoints
 
-        self.waypoints = []
-        for i in range(len(waypoints)):
-            self.waypoints.append([waypoints[i].x, 
-                                   waypoints[i].y,
-                                   waypoints[i].z])
-        self.waypoints = np.array(self.waypoints)        
-        self.get_logger().info('Waypoints received')
+        waypoints = []
+        for i in range(len(waypoints_msg)):
+            waypoints.append([waypoints_msg[i].x, 
+                              waypoints_msg[i].y,
+                              waypoints_msg[i].z])
+        waypoints = np.array(waypoints)
+
+        # Check if the vehicle has already passed some updated waypoints
+        if self.waypoints is not None:
+            idx = self.eta_msg.current_waypoint
+            delta = self.waypoints[:idx+1]-waypoints[:idx+1]
+            if np.sum(delta) > 0:
+                self.get_logger().info('Waypoints rejected! Vehicle has already passed some updated waypoints')
+                self.get_logger().info(f'{delta} {idx}')
+                response.success = False
+                return response
+        
+        self.waypoints = waypoints
+        self.get_logger().info('Waypoints received and accepted')
         response.success = True
         return response
     
     def publish_eta(self):
-        idx = self.eta_msg.current_waypoint
+        idx = self.eta_msg.current_waypoint-1
+        if idx < 0:
+            return
         self.distances[idx] = self.waypoint_distance
         waypoints_eta = self.distances/self.velocity
         self.eta_msg.eta = []

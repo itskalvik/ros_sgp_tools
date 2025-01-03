@@ -1,12 +1,13 @@
 #! /usr/bin/env python3
 
 import os
+import time
 import h5py
 import importlib
 from threading import Lock
 
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 
 import matplotlib.pyplot as plt
 
@@ -100,23 +101,22 @@ class OnlineIPP(Node):
         self.data_y = []
         self.current_waypoint = -1
         self.lock = Lock()
+        self.runtime_est = None
         
         # Setup the service to receive the waypoints and X_train data
-        self.srv = self.create_service(IPP, 'offlineIPP', 
-                                       self.offlineIPP_service_callback)
-        
+        srv = self.create_service(IPP, 'offlineIPP', 
+                                  self.offlineIPP_service_callback)
         # Wait to get the waypoints from the offline IPP planner
-        # Stop service after receiving the waypoints from the offline IPP planner
         while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
-        del self.srv
-
-        self.num_waypoints = len(self.waypoints)
+        srv.destroy()
 
         # Init the sgp models for online IPP and parameter estimation
+        self.num_waypoints = len(self.waypoints)
         self.init_sgp_models()
         
         # Sync the waypoints with the mission planner
+        self.waypoints_service = self.create_client(Waypoints, 'waypoints')
         waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
         self.sync_waypoints(waypoints)
         self.get_logger().info('Initial waypoints synced with the mission planner')
@@ -134,15 +134,18 @@ class OnlineIPP(Node):
         sensors_module = importlib.import_module('sensors')
         self.sensors = []
         sensor_subscribers = []
+        sensor_group = ReentrantCallbackGroup()
 
         data_obj = getattr(sensors_module, 'GPS')()
         self.sensors.append(data_obj)
-        sensor_subscribers.append(data_obj.get_subscriber(self))
+        sensor_subscribers.append(data_obj.get_subscriber(self,
+                                                          callback_group=sensor_group))
 
         if self.data_type != 'Altitude':
             data_obj = getattr(sensors_module, self.data_type)()
             self.sensors.append(data_obj)
-            sensor_subscribers.append(data_obj.get_subscriber(self))
+            sensor_subscribers.append(data_obj.get_subscriber(self,
+                                                              callback_group=sensor_group))
 
         self.time_sync = ApproximateTimeSynchronizer([*sensor_subscribers],
                                                      queue_size=10, slop=0.1)
@@ -150,8 +153,9 @@ class OnlineIPP(Node):
 
         # Setup the timer to update the parameters and waypoints
         # Makes sure only one instance runs at a time
+        timer_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(5.0, self.update_with_data,
-                                       callback_group=MutuallyExclusiveCallbackGroup())
+                                       callback_group=timer_group)
 
     '''
     Service callback to receive the waypoints, X_train, and sampling rate from offlineIPP node
@@ -259,25 +263,23 @@ class OnlineIPP(Node):
     def sync_waypoints(self, waypoints):
         # Send the new waypoints to the mission planner and 
         # update the current waypoint from the service
-        
-        service = f'waypoints'
-        waypoints_service = self.create_client(Waypoints, service)
         request = Waypoints.Request()
-
-        while not waypoints_service.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(f'{service} service not avaliable, waiting...')
+        while not self.waypoints_service.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info(f'waypoints service not avaliable, waiting...')
 
         for waypoint in waypoints:
             z = waypoint[2] if self.use_altitude else 20.0
             request.waypoints.waypoints.append(Point(x=waypoint[0],
                                                      y=waypoint[1],
                                                      z=z))
-        
-        future = waypoints_service.call_async(request)
-        while future.result() is not None:
-            rclpy.spin_once(self, timeout_sec=0.5)
+        self.waypoint_response = None
+        future = self.waypoints_service.call_async(request)
+        future.add_done_callback(self.save_future_response)
+    
+    def save_future_response(self, future):
+        self.waypoint_response = future.result()
 
-    def plot_paths(self, waypoints, X_data, pts_ind):
+    def plot_paths(self, waypoints, X_data, pts_ind, update_waypoint):
         current_waypoint = self.current_waypoint if self.current_waypoint>-1 else 0
 
         fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
@@ -288,6 +290,7 @@ class OnlineIPP(Node):
         dset.attrs['lengthscales'] = self.param_model.kernel.lengthscales.numpy()
         dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
         dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
+        dset.attrs['update_waypoint'] = update_waypoint
 
         plt.figure()
         plt.gca().set_aspect('equal')
@@ -297,13 +300,13 @@ class OnlineIPP(Node):
                     marker='.', s=1, label='Candidates')
         plt.plot(waypoints[:, 0], waypoints[:, 1], 
                  label='Path', marker='o', c='r')
-        plt.scatter(waypoints[current_waypoint, 0], waypoints[current_waypoint, 1],
+        plt.scatter(waypoints[update_waypoint, 0], waypoints[update_waypoint, 1],
                     label='Update Waypoint', zorder=2, c='g')
         
         plt.scatter(X_data[:, 0], X_data[:, 1], 
-                    label='Data', c='b', marker='x', zorder=3)
+                    label='Data', c='b', marker='x', zorder=3, s=1)
         plt.scatter(pts_ind[:, 0], pts_ind[:, 1], 
-                    label='Pts', marker='.', c='r', zorder=4)
+                    label='Pts', marker='.', c='g', zorder=4, s=2)
 
         plt.legend()
         plt.savefig(os.path.join(self.data_folder, 
@@ -331,24 +334,33 @@ class OnlineIPP(Node):
             self.update_param(self.X_scaler.transform(data_X), data_y)
             end_time = self.get_clock().now().to_msg().sec
             self.get_logger().info(f'Param update time: {end_time-start_time} secs')
+            if self.runtime_est is None: 
+                self.runtime_est = end_time-start_time
 
             start_time = self.get_clock().now().to_msg().sec
-            self.update_waypoints()
+            update_waypoint = self.update_waypoints()
             end_time = self.get_clock().now().to_msg().sec
-            self.get_logger().info(f'IPP update time: {end_time-start_time} secs')
+            runtime = end_time-start_time
+            self.get_logger().info(f'IPP update time: {runtime} secs')
+            # Store the IPP runtime upper bound
+            if self.runtime_est < runtime:
+                self.runtime_est = runtime
 
             # Sync the waypoints with the mission planner
             waypoints = self.X_scaler.inverse_transform(np.array(self.waypoints))
             self.sync_waypoints(waypoints)
+            while self.waypoint_response is None:
+                time.sleep(0.1)
 
-            self.get_logger().info('Updated waypoints synced with the mission planner')
+            if self.waypoint_response.success:
+                self.get_logger().info(f'Updated waypoints synced with the mission planner')
 
+                pts_ind = self.param_model.inducing_variable.Z.numpy()
+                self.plot_paths(np.array(self.waypoints), 
+                                self.X_scaler.transform(data_X), 
+                                pts_ind, update_waypoint)
+            
             # Dump data to data store
-            pts_ind = self.param_model.inducing_variable.Z.numpy()
-            self.plot_paths(np.array(self.waypoints), 
-                            self.X_scaler.transform(data_X), 
-                            pts_ind)
-
             self.dset_X.resize(self.dset_X.shape[0]+len(data_X), axis=0)   
             self.dset_X[-len(data_X):] = data_X
 
@@ -359,7 +371,8 @@ class OnlineIPP(Node):
         """Update the IPP solution."""
 
         # Freeze the visited inducing points
-        Xu_visited = self.waypoints.copy()[:self.current_waypoint+2]
+        update_waypoint = self.get_update_waypoint()
+        Xu_visited = self.waypoints.copy()[:update_waypoint]
         Xu_visited = np.array(Xu_visited).reshape(1, -1, self.n_dim)
         self.IPP_model.transform.update_Xu_fixed(Xu_visited)
 
@@ -375,12 +388,13 @@ class OnlineIPP(Node):
         waypoints = self.IPP_model.transform.expand(waypoints,
                                                     expand_sensor_model=False).numpy()
         waypoints = project_waypoints(waypoints, self.X_candidates)
-        self.waypoints = waypoints
+        self.new_waypoints = waypoints
+        return update_waypoint
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
         # Set the incucing points to be along the traversed path
-        inducing_variable = self.waypoints[:self.current_waypoint+1]
+        inducing_variable = self.waypoints[:self.current_waypoint]
         # Ensure inducing points do not extend beyond the collected data
         inducing_variable[-1] = X_new[-1]
         # Resample the path to the number of inducing points
@@ -395,6 +409,14 @@ class OnlineIPP(Node):
         self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
         self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
         self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
+
+    def get_update_waypoint(self):
+        """Returns the waypoint index that is safe to update."""
+        # Do not update the current target waypoint
+        for i in range(self.current_waypoint, len(self.eta)):
+            if self.eta[i] > self.runtime_est:
+                # Map path edge idx to waypoint index
+                return i+1
 
 
 if __name__ == '__main__':

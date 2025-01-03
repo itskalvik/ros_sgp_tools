@@ -15,31 +15,31 @@ class SensorCallback:
     def process_msg(self, msg):
         pass
 
-
 class GPS(SensorCallback):
-    def get_subscriber(self, node_obj):
+    def get_subscriber(self, node_obj, callback_group=None):
         sub =  Subscriber(node_obj, NavSatFix, 
                           "mavros/global_position/global",
-                          qos_profile=qos_profile_sensor_data)
+                          qos_profile=qos_profile_sensor_data,
+                          callback_group=callback_group)
         return sub
     
     def process_msg(self, msg):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
-    
 
 class SerialPing2(SensorCallback):
     def __init__(self):
         self.topic = "mavros/rangefinder_pub"
 
-    def get_subscriber(self, node_obj):
+    def get_subscriber(self, node_obj, callback_group=None):
         sub = Subscriber(node_obj, Range, 
                          self.topic,
-                         qos_profile=qos_profile_sensor_data)
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
         return sub
     
     def process_msg(self, msg, position):
         return [position[:2]], [msg.range]
-    
+
 class Ping2(SerialPing2):
     def __init__(self):
         self.topic = "ping1d/range"
@@ -58,7 +58,6 @@ class Pressure(SensorCallback):
         if self.data_mean is None:
             self.data_mean = msg.fluid_pressure
         return [position[:2]], [msg.fluid_pressure-self.data_mean]
-
 
 class ZED(SensorCallback):
     def __init__(self):
