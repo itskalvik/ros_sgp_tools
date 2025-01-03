@@ -38,10 +38,6 @@ class DataVisualizer(Node):
             logs = os.listdir(data_folder)
             mission_log = sorted([log for log in logs if 'IPP-mission' in log])[-1]
 
-        self.get_logger().info(f'Data Folder: {data_folder}')
-        self.get_logger().info(f'Mission Log: {mission_log}')
-        self.get_logger().info(f'Number of samples: {self.num_samples}')
-
         # data file
         self.fname = os.path.join(data_folder, 
                                   mission_log,
@@ -52,6 +48,11 @@ class DataVisualizer(Node):
             self.fence_vertices = f["fence_vertices"][:].astype(float)
             self.X = f["X"][:].astype(float)
             self.y = f["y"][:].astype(float)
+
+        self.get_logger().info(f'Data Folder: {data_folder}')
+        self.get_logger().info(f'Mission Log: {mission_log}')
+        self.get_logger().info(f'Number of data samples: {self.X.shape[0]}')
+        self.get_logger().info(f'Number of reconstruction samples: {self.num_samples}')
 
         # Normalize the candidates
         X_candidates = ploygon2candidats(self.fence_vertices, 

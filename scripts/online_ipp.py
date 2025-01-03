@@ -330,14 +330,14 @@ class OnlineIPP(Node):
                 dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
                 dset.attrs['update_waypoint'] = update_waypoint
 
-            if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
-                self.get_logger().info('Finished mission, shutting down online planner')
-                rclpy.shutdown()
-
             self.plot_paths(fname, self.waypoints,
                             self.X_scaler.transform(data_X),
                             self.param_model.inducing_variable.Z.numpy(),
                             update_waypoint)
+
+            if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
+                self.get_logger().info('Finished mission, shutting down online planner')
+                rclpy.shutdown()
 
     def update_waypoints(self):
         """Update the IPP solution."""
