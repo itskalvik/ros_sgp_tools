@@ -54,9 +54,9 @@ class IPPMissionPlanner(MissionPlanner):
         if self.waypoints is not None:
             idx = self.eta_msg.current_waypoint
             delta = self.waypoints[:idx+1]-waypoints[:idx+1]
-            if np.sum(delta) > 0:
+            if np.sum(np.abs(delta)) > 0:
                 self.get_logger().info('Waypoints rejected! Vehicle has already passed some updated waypoints')
-                self.get_logger().info(f'{delta} {idx}')
+                self.get_logger().info(f'{delta}')
                 response.success = False
                 return response
         

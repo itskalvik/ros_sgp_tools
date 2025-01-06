@@ -52,6 +52,10 @@ class OnlineIPP(Node):
         self.data_buffer_size = self.get_parameter('data_buffer_size').get_parameter_value().integer_value
         self.get_logger().info(f'Data Buffer Size: {self.data_buffer_size}')
 
+        self.declare_parameter('train_param_inducing', False)
+        self.train_param_inducing = self.get_parameter('train_param_inducing').get_parameter_value().bool_value
+        self.get_logger().info(f'Train Param Inducing: {self.train_param_inducing}')
+
         self.declare_parameter('data_type', 'Altitude')
         self.data_type = self.get_parameter('data_type').get_parameter_value().string_value
         self.get_logger().info(f'Data Type: {self.data_type}')
@@ -332,8 +336,10 @@ class OnlineIPP(Node):
 
             self.plot_paths(fname, self.waypoints,
                             self.X_scaler.transform(data_X),
+                            inducing_pts=self.param_model.inducing_variable.Z.numpy(),
                             update_waypoint=update_waypoint)
 
+            # Shutdown the online planner if the mission planner has shutdown
             if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
                 self.get_logger().info('Finished mission, shutting down online planner')
                 rclpy.shutdown()
@@ -369,6 +375,7 @@ class OnlineIPP(Node):
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
+        # Don't update the parameters if the current target is the last waypoint
         if self.current_waypoint >= self.num_waypoints-1:
             return
         
@@ -381,10 +388,17 @@ class OnlineIPP(Node):
                                           self.num_param_inducing)
         self.param_model.update((X_new, y_new), 
                                 inducing_variable=inducing_variable)
-        optimize_model(self.param_model,
-                       trainable_variables=self.param_model.trainable_variables[1:], 
-                       optimizer='scipy')
+        
+        if self.train_param_inducing:
+            trainable_variables = None
+        else:
+            trainable_variables=self.param_model.trainable_variables[1:]
 
+        optimize_model(self.param_model,
+                       trainable_variables=trainable_variables,
+                       optimizer='scipy',
+                       method='CG')
+        
         self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
         self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
         self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
@@ -396,6 +410,8 @@ class OnlineIPP(Node):
             if self.eta[i] > self.runtime_est:
                 # Map path edge idx to waypoint index
                 return i+1
+        # Do not update the path if none of waypoints can be 
+        # updated before the vehicle reaches them
         return -1
 
     def plot_paths(self, fname, waypoints, 
