@@ -341,6 +341,9 @@ class OnlineIPP(Node):
 
             # Shutdown the online planner if the mission planner has shutdown
             if self.current_waypoint >= self.num_waypoints-1 and self.eta[-1] < 3:
+                # Rerun method to get last batch of data
+                if not force_update:
+                    self.update_with_data(force_update=True)
                 self.get_logger().info('Finished mission, shutting down online planner')
                 rclpy.shutdown()
 
