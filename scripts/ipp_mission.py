@@ -31,8 +31,8 @@ class IPPMissionPlanner(MissionPlanner):
         while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
 
-        self.distances = self.haversine(self.waypoints[1:], 
-                                        self.waypoints[:-1])
+        self.distances = np.linalg.norm(self.waypoints[1:]-self.waypoints[:-1],
+                                        axis=-1)
 
         # Setup timers
         self.eta_timer = self.create_timer(1, self.publish_eta)

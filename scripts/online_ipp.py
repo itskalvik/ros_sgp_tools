@@ -19,7 +19,7 @@ from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
 from sgptools.utils.tsp import resample_path
-from utils import CustomStandardScaler
+from utils import StandardScaler
 
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
@@ -131,7 +131,7 @@ class OnlineIPP(Node):
         sensor_subscribers = []
         sensor_group = ReentrantCallbackGroup()
 
-        data_obj = getattr(sensors_module, 'GPS')()
+        data_obj = getattr(sensors_module, 'DVL')()
         self.sensors.append(data_obj)
         sensor_subscribers.append(data_obj.get_subscriber(self,
                                                           callback_group=sensor_group))
@@ -193,7 +193,7 @@ class OnlineIPP(Node):
         dset.attrs['sampling_rate'] = self.sampling_rate
 
         # Normalize the train set and waypoints
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = StandardScaler()
         self.X_scaler.fit(self.X_candidates)
         self.X_candidates = self.X_scaler.transform(self.X_candidates)
         self.waypoints = self.X_scaler.transform(self.waypoints)
@@ -335,7 +335,6 @@ class OnlineIPP(Node):
                 dset.attrs['update_waypoint'] = update_waypoint
 
             self.plot_paths(fname, self.waypoints,
-                            self.X_scaler.transform(data_X),
                             inducing_pts=self.param_model.inducing_variable.Z.numpy(),
                             update_waypoint=update_waypoint)
 

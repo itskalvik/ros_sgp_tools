@@ -38,7 +38,7 @@ def generate_launch_description():
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch', 'data',
-                                          'mission.plan'])
+                                          'local_mission.plan'])
     
     print("\nParameters:")
     print("===========")

@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 import os
-from utils import get_mission_plan, CustomStandardScaler
+from utils import get_mission_plan, StandardScaler
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
@@ -82,14 +82,14 @@ class offlineIPP(Node):
         self.fence_vertices, home_position = get_mission_plan(plan_fname)
         self.X_candidates = ploygon2candidats(self.fence_vertices, num_samples=5000)
         self.X_candidates = np.array(self.X_candidates).reshape(-1, 2)
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = StandardScaler()
         self.X_scaler.fit(self.X_candidates)
         self.X_candidates = self.X_scaler.transform(self.X_candidates)
 
         # Shift home position for each robot to avoid collision with other robots
         home_positions = []
         for i in range(self.num_robots):
-            home_positions.append(np.array(home_position[:2]) + (np.array([3/111111, 0.0])*i))
+            home_positions.append(np.array(home_position[:2]) + (np.array([1.0, 0.0])*i))
         home_position = np.array(home_positions).reshape(-1, 2)
         self.home_position = self.X_scaler.transform(home_position)
 
