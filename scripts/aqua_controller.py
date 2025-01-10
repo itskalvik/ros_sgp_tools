@@ -42,11 +42,13 @@ class AquaController(Node):
         self.get_logger().info('--> Autopilot activated.')
 
         # Init vars
+        self.mission_depth = 3.0
         self.vehicle_position = np.array([0., 0., 0.])
         self.autopilot_command = AutopilotCommand()
-        self.autopilot_command.target_depth = 3.0
+        self.autopilot_command.target_depth = self.mission_depth
         self.use_altitude = False
         self.angle_tolerance = 0.1
+        self.position_tolerance = 0.5
 
         # Setup subscribers
         # SENSOR_QOS used for most of sensor streams
@@ -66,11 +68,11 @@ class AquaController(Node):
             AutopilotCommand, '/aqua/autopilot/command', STATE_QOS)
     
         # Create the trajectory controller
-        self.get_control_cmd = create_hybrid_unicycle_pose_controller(linear_velocity_gain=10.0,
+        self.get_control_cmd = create_hybrid_unicycle_pose_controller(linear_velocity_gain=8.0,
                                                                       angular_velocity_gain=0.6,
-                                                                      position_error=0.1, 
                                                                       position_epsilon=0.3, 
-                                                                      rotation_error=0.1)
+                                                                      position_error=self.position_tolerance, 
+                                                                      rotation_error=self.angle_tolerance)
 
     def call_client(self, cli, request):
         while not cli.wait_for_service(timeout_sec=1.0):
@@ -92,16 +94,11 @@ class AquaController(Node):
         (_, _, yaw) = tf_transformations.euler_from_quaternion(q)
         self.vehicle_position[2] = yaw
 
-    def at_waypoint(self, waypoint, xy_tolerance=0.7, z_tolerance=0.3):
+    def at_waypoint(self, waypoint, xy_tolerance=0.7):
         """Check if the vehicle is at the waypoint."""
         dist = self.vehicle_position[:2].reshape(1, -1)-np.array(waypoint[:2]).reshape(1, -1)
         self.waypoint_distance = np.linalg.norm(dist)
-        if self.use_altitude:
-            z_dist = np.abs(self.vehicle_position[2] - waypoint[2])
-        else: 
-            z_dist = 0.0
-
-        if self.waypoint_distance < xy_tolerance and z_dist < z_tolerance:
+        if self.waypoint_distance < self.position_tolerance:
             return True
         else:
             return False
@@ -122,6 +119,7 @@ class AquaController(Node):
                     control_cmd = [[0.], [goal[2]]]
                 else:
                     rotation_complete = True
+                    self.get_logger().info(f'Rotation complete')
                     continue
             # Move the robot to the goal
             else:
@@ -131,14 +129,15 @@ class AquaController(Node):
             # Publish the control command
             if control_cmd[0][0] < 0:
                 rotation_complete = False
+                self.get_logger().info(f'Realigning with the waypoint')
                 continue
 
-            target_yaw = self.vehicle_position[2]+control_cmd[1][0]
-            target_yaw = np.arctan2(np.sin(target_yaw), np.cos(target_yaw))
+            # Ignore unicycle model controller for yaw control
+            target_yaw = np.arctan2(np.sin(goal[2]), np.cos(goal[2]))
             target_yaw = np.degrees(target_yaw)
 
             self.autopilot_command.target_yaw = target_yaw
-            self.autopilot_command.surge = np.clip(control_cmd[0][0], -1., 1.)
+            self.autopilot_command.surge = np.clip(control_cmd[0][0], 0., 1.)
             self.autopilot_command_publisher.publish(self.autopilot_command)
             rclpy.spin_once(self)
 
@@ -150,7 +149,6 @@ class AquaController(Node):
         return True
 
     def mission(self):
-
         self.get_logger().info('Visiting waypoint 1')
         if self.go2waypoint([5.0, 0.0]):
             self.get_logger().info('Reached waypoint 1')
@@ -173,8 +171,6 @@ def main(args=None):
 
     node = AquaController()
     node.mission()
-    while True:
-        rclpy.spin_once(node)
 
 if __name__ == '__main__':
     main()

@@ -38,6 +38,7 @@ endif()
 
 # Install Python executables
 install(PROGRAMS
+  scripts/aqua_controller.py
   scripts/offline_ipp.py
   scripts/online_ipp.py
   scripts/ipp_mission.py
