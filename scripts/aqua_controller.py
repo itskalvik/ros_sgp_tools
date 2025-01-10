@@ -3,7 +3,9 @@ import time
 import rclpy
 import tf_transformations
 from rclpy.node import Node
+from collections import deque
 from std_srvs.srv import Empty
+from nav_msgs.msg import Odometry
 from aqua2_interfaces.msg import AutopilotCommand
 from aqua2_interfaces.srv import GetBool, SetString, SetInt
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -41,6 +43,28 @@ class AquaController(Node):
         assert response.msg == ''
         self.get_logger().info('--> Autopilot activated.')
 
+        '''
+        # Reset DVL
+        self.get_logger().info('Resetting DVL')
+        reset_odometry = self.create_client(Empty, '/aqua/dvl/reset_odometry')
+        response = self.call_client(reset_odometry, Empty.Request())
+        assert response.success
+        self.get_logger().info('--> DVL reset complete')
+
+        # Reset IMU
+        self.get_logger().info('Resetting IMU')
+        zero_heading = self.create_client(Empty, '/aqua/imu/zero_heading')
+        response = self.call_client(zero_heading, Empty.Request())
+        assert response.success
+        self.get_logger().info(f'--> IMU reset complete')
+
+        # Reset heading
+        self.get_logger().info('Resetting pose')
+        set_pose = self.create_client(Empty, '/aqua/set_pose')
+        response = self.call_client(set_pose, Empty.Request())
+        self.get_logger().info(f'--> Pose reset complete ({response})')
+        '''
+
         # Init vars
         self.mission_depth = 3.0
         self.vehicle_position = np.array([0., 0., 0.])
@@ -49,6 +73,9 @@ class AquaController(Node):
         self.use_altitude = False
         self.angle_tolerance = 0.1
         self.position_tolerance = 0.5
+        self.velocity = 0.01
+        self.velocity_buffer = deque([0.01])
+        self.waypoint_distance = -1
 
         # Setup subscribers
         # SENSOR_QOS used for most of sensor streams
@@ -63,6 +90,10 @@ class AquaController(Node):
             PoseWithCovarianceStamped, '/aqua/dvl_pose_estimate',
             self.vehicle_pose_callback, SENSOR_QOS)
         
+        self.vehicle_odom_subscriber = self.create_subscription(
+            Odometry, '/aqua/simulator/pose',
+            self.vehicle_odom_callback, SENSOR_QOS)
+
         # Create publishers
         self.autopilot_command_publisher = self.create_publisher(
             AutopilotCommand, '/aqua/autopilot/command', STATE_QOS)
@@ -73,7 +104,7 @@ class AquaController(Node):
                                                                       position_epsilon=0.3, 
                                                                       position_error=self.position_tolerance, 
                                                                       rotation_error=self.angle_tolerance)
-
+        
     def call_client(self, cli, request):
         while not cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
@@ -82,6 +113,17 @@ class AquaController(Node):
         rclpy.spin_until_future_complete(self, future)
         return future.result()
     
+    def vehicle_odom_callback(self, msg):
+        """Callback function for vehicle odom topic subscriber.
+        Computes nominal linear velocity"""
+        velocity = np.hypot(msg.twist.twist.linear.x,
+                            msg.twist.twist.linear.y)
+        if len(self.velocity_buffer) > 50:
+            self.velocity_buffer.popleft()
+        if velocity > 0.2:
+            self.velocity_buffer.append(velocity)
+        self.velocity = np.mean(self.velocity_buffer)
+
     def vehicle_pose_callback(self, msg):
         self.vehicle_position[0] = msg.pose.pose.position.x
         self.vehicle_position[1] = msg.pose.pose.position.y
@@ -168,7 +210,6 @@ class AquaController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
     node = AquaController()
     node.mission()
 
