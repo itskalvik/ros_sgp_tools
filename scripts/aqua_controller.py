@@ -18,6 +18,26 @@ class AquaController(Node):
     def __init__(self):
         super().__init__('aqua_controller')
 
+        # Reset DVL
+        self.get_logger().info('Resetting DVL')
+        reset_odometry = self.create_client(Empty, '/aqua/dvl/reset_odometry')
+        response = self.call_client(reset_odometry, Empty.Request())
+        assert response.success
+        self.get_logger().info('--> DVL reset complete')
+
+        # Reset IMU
+        self.get_logger().info('Resetting IMU')
+        zero_heading = self.create_client(Empty, '/aqua/imu/zero_heading')
+        response = self.call_client(zero_heading, Empty.Request())
+        assert response.success
+        self.get_logger().info(f'--> IMU reset complete')
+
+        # Reset heading
+        self.get_logger().info('Resetting pose')
+        set_pose = self.create_client(Empty, '/aqua/set_pose')
+        response = self.call_client(set_pose, Empty.Request())
+        self.get_logger().info(f'--> Pose reset complete ({response})')
+
         # Make sure the system is calibrated
         is_calibrated = self.create_client(GetBool, '/aqua/system/is_calibrated')
         calibrate = self.create_client(Empty, '/aqua/system/calibrate')
@@ -42,28 +62,6 @@ class AquaController(Node):
         response = self.call_client(set_autopilot_mode, SetInt.Request(value=4))
         assert response.msg == ''
         self.get_logger().info('--> Autopilot activated.')
-
-        '''
-        # Reset DVL
-        self.get_logger().info('Resetting DVL')
-        reset_odometry = self.create_client(Empty, '/aqua/dvl/reset_odometry')
-        response = self.call_client(reset_odometry, Empty.Request())
-        assert response.success
-        self.get_logger().info('--> DVL reset complete')
-
-        # Reset IMU
-        self.get_logger().info('Resetting IMU')
-        zero_heading = self.create_client(Empty, '/aqua/imu/zero_heading')
-        response = self.call_client(zero_heading, Empty.Request())
-        assert response.success
-        self.get_logger().info(f'--> IMU reset complete')
-
-        # Reset heading
-        self.get_logger().info('Resetting pose')
-        set_pose = self.create_client(Empty, '/aqua/set_pose')
-        response = self.call_client(set_pose, Empty.Request())
-        self.get_logger().info(f'--> Pose reset complete ({response})')
-        '''
 
         # Init vars
         self.mission_depth = 3.0
@@ -206,7 +204,6 @@ class AquaController(Node):
         self.get_logger().info('Visiting waypoint 4')
         if self.go2waypoint([0.0, 0.0]):
             self.get_logger().info('Reached waypoint 4')
-
 
 def main(args=None):
     rclpy.init(args=args)
