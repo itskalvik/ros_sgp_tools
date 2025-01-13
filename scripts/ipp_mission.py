@@ -1,23 +1,23 @@
 #! /usr/bin/env python3
 
-from guided_mission import MissionPlanner
+from aqua_controller import AquaController
 from ros_sgp_tools.srv import Waypoints
 from ros_sgp_tools.msg import ETA
 import numpy as np
 import rclpy
 
 
-class IPPMissionPlanner(MissionPlanner):
+class IPPMissionPlanner(AquaController):
 
-    def __init__(self, use_altitude=False):
-        super().__init__(use_altitude=use_altitude)
+    def __init__(self):
+        AquaController.__init__(self)
 
         # Setup current waypoint publisher that publishes at 10Hz
         self.eta_publisher = self.create_publisher(ETA, 'eta', 10)
 
         # Setup waypoint service
         self.waypoint_service = self.create_service(Waypoints, 
-                                                    'waypoints',
+                                                    '/robot_0/waypoints',
                                                     self.waypoint_service_callback)
       
         # Initialize variables
@@ -78,48 +78,16 @@ class IPPMissionPlanner(MissionPlanner):
         self.eta_publisher.publish(self.eta_msg)
 
     def mission(self):
-        """IPP mission"""
-        mission_altitude = self.vehicle_position[2] # Ignored by Rover
-
-        self.get_logger().info('Engaging GUIDED mode')
-        if self.engage_mode('GUIDED'):
-            self.get_logger().info('GUIDED mode Engaged')
-
-        self.get_logger().info('Setting current positon as home')
-        if self.set_home(self.vehicle_position[0], self.vehicle_position[1]):
-            self.get_logger().info('Home position set')
-
-        self.get_logger().info('Arming')
-        if self.arm(True):
-            self.get_logger().info('Armed')
-
-        if self.use_altitude:
-            if self.takeoff(mission_altitude+20.0):
-                self.get_logger().info('Takeoff complete')
-
         for i in range(len(self.waypoints)):
             self.eta_msg.current_waypoint = i
-            self.get_logger().info(f'Visiting waypoint {i}: {self.waypoints[i]}')
+            self.get_logger().info(f'Visiting waypoint {i}: {self.waypoints[i][:2]}')
             if self.go2waypoint([self.waypoints[i][0],
-                                 self.waypoints[i][1],
-                                 self.waypoints[i][2]+mission_altitude,]):
+                                 self.waypoints[i][1]]):
                 self.get_logger().info(f'Reached waypoint {i}')
-
-        if self.use_altitude:
-            if self.land(mission_altitude):
-                self.get_logger().info('Landing complete')
-
-        self.get_logger().info('Disarming')
-        if self.arm(False):
-            self.get_logger().info('Disarmed')
-
         self.get_logger().info('Mission complete')
 
-
-def main(args=None):
-    rclpy.init(args=args)
-    mission_planner = IPPMissionPlanner()
-    rclpy.spin_once(mission_planner)
+def main():
+    _ = IPPMissionPlanner()
 
 if __name__ == '__main__':
     main()
