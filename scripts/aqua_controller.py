@@ -4,6 +4,7 @@ import numpy as np
 from collections import deque
 from nav_msgs.msg import Odometry
 
+import rclpy
 from aqua2_navigation.swimmer import SwimmerAPI
 
 
@@ -26,6 +27,8 @@ class AquaController(SwimmerAPI):
         # Sets the Robot's Autopilot to depth mode. In depth mode, the Robot will ignore pitch and roll targets.
         self.set_autopilot_mode("depth")
 
+        self.set_acceptance_radius(2.0)
+
         self.velocity = 0.01
         self.velocity_buffer = deque([0.01])
         self.create_subscription(Odometry, 
@@ -47,11 +50,13 @@ class AquaController(SwimmerAPI):
     def go2waypoint(self, goal):
         self.swim_to_wp(speed=1.0, depth=5.0, 
                         x=goal[0], y=goal[1], 
-                        blocking=True)
-        
+                        blocking=False)
+        while not self.is_at_waypoint():
+            rclpy.spin_once(self, timeout_sec=1.0)
+
     def mission(self):
         self.get_logger().info('Visiting waypoint 1')
-        if self.go2waypoint([5.0, 0.0]):
+        if self.go2waypoint([-5.0, 0.0]):
             self.get_logger().info('Reached waypoint 1')
 
         self.get_logger().info('Visiting waypoint 2')

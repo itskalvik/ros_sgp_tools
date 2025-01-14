@@ -4,11 +4,9 @@ import psutil
 
 from launch_ros.actions import Node
 from launch import LaunchDescription
-from launch_ros.actions import PushRosNamespace
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import GroupAction, IncludeLaunchDescription
-from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
+
 
 def get_var(var, default):
     try:
@@ -24,7 +22,7 @@ def generate_launch_description():
 
     # Get parameter values
     namespace = get_var('NAMESPACE', 'robot_0')
-    data_type = get_var('DATA_TYPE' ,'SerialPing2')
+    data_type = get_var('DATA_TYPE' ,'AquaPing2')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
     data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 100))

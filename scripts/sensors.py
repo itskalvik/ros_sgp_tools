@@ -1,5 +1,6 @@
 from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image
 from rclpy.qos import qos_profile_sensor_data, QoSProfile
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from message_filters import Subscriber
 from nav_msgs.msg import Odometry
 from cv_bridge import CvBridge
@@ -29,8 +30,8 @@ class GPS(SensorCallback):
 
 class DVL(SensorCallback):
     def get_subscriber(self, node_obj, callback_group=None):
-        sub =  Subscriber(node_obj, Odometry,
-                          "mavros/local_position/odom",
+        sub =  Subscriber(node_obj, PoseWithCovarianceStamped,
+                          "/aqua/dvl/position_estimate",
                           qos_profile=qos_profile_sensor_data,
                           callback_group=callback_group)
         return sub
@@ -39,6 +40,20 @@ class DVL(SensorCallback):
         return np.array([msg.pose.pose.position.x,
                          msg.pose.pose.position.y,
                          msg.pose.pose.position.z])
+
+class AquaPing2(SensorCallback):
+    def __init__(self):
+        self.topic = "/aqua/depth"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        sub = Subscriber(node_obj, Odometry, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg, position):
+        return [position[:2]], [msg.pose.pose.position.z]
 
 class SerialPing2(SensorCallback):
     def __init__(self):
