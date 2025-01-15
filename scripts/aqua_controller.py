@@ -27,7 +27,7 @@ class AquaController(SwimmerAPI):
         # Sets the Robot's Autopilot to depth mode. In depth mode, the Robot will ignore pitch and roll targets.
         self.set_autopilot_mode("depth")
 
-        self.set_acceptance_radius(2.0)
+        self.set_acceptance_radius(1.5)
 
         self.velocity = 0.01
         self.velocity_buffer = deque([0.01])

@@ -29,8 +29,6 @@ def generate_launch_description():
     train_param_inducing = True if get_var('TRAIN_PARAM_INDUCING', 'False')=='True' else False
     num_param_inducing = int(get_var('NUM_PARAM_INDUCING', 40))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
-    start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
-    fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     
     num_robots = 1
@@ -48,8 +46,6 @@ def generate_launch_description():
     print(f"TRAIN_PARAM_INDUCING: {train_param_inducing}")
     print(f"NUM_PARAM_INDUCING': {num_param_inducing}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
-    print(f"START_FOXGLOVE: {start_foxglove}")
-    print(f"FAKE_DATA: {fake_data}\n")
 
     nodes = []
 
@@ -84,13 +80,5 @@ def generate_launch_description():
                            executable='ipp_mission.py',
                            name='IPPMission')
     nodes.append(mission_planner)
-
-    if fake_data and data_type=='SerialPing2':
-        print("Publishing Fake Sonar Data")
-        sensor = Node(package='ros_sgp_tools',
-                      executable='lake_depth_publisher.py',
-                      name='FakeSonarData',
-                      namespace=namespace)
-        nodes.append(sensor)  
 
     return LaunchDescription(nodes)
