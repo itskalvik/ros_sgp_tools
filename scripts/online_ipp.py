@@ -68,9 +68,9 @@ class OnlineIPP(Node):
         self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
         self.get_logger().info(f'Data Folder: {self.data_folder}')
 
-        self.declare_parameter('visualize', False)
-        self.visualize = self.get_parameter('visualize').get_parameter_value().bool_value
-        self.get_logger().info(f'Visualize: {self.visualize}')
+        self.declare_parameter('namespace', 'aqua')
+        self.namespace = self.get_parameter('namespace').get_parameter_value().string_value
+        self.get_logger().info(f'Namespace: {self.namespace}')
 
         # Create sensor data h5py file
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
@@ -131,13 +131,13 @@ class OnlineIPP(Node):
         sensor_subscribers = []
         sensor_group = ReentrantCallbackGroup()
 
-        data_obj = getattr(sensors_module, 'DVL')()
+        data_obj = getattr(sensors_module, 'DVL')(namespace=self.namespace)
         self.sensors.append(data_obj)
         sensor_subscribers.append(data_obj.get_subscriber(self,
                                                           callback_group=sensor_group))
 
         if self.data_type != 'Altitude':
-            data_obj = getattr(sensors_module, self.data_type)()
+            data_obj = getattr(sensors_module, self.data_type)(namespace=self.namespace)
             self.sensors.append(data_obj)
             sensor_subscribers.append(data_obj.get_subscriber(self,
                                                               callback_group=sensor_group))

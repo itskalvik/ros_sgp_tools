@@ -25,11 +25,12 @@ def generate_launch_description():
     data_type = get_var('DATA_TYPE' ,'AquaPing2')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
-    data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 100))
+    data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 400))
     train_param_inducing = True if get_var('TRAIN_PARAM_INDUCING', 'False')=='True' else False
     num_param_inducing = int(get_var('NUM_PARAM_INDUCING', 40))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
+    aqua_namespace = 'a14'
     
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
@@ -71,7 +72,8 @@ def generate_launch_description():
                                'data_folder': data_folder,
                                'data_buffer_size': data_buffer_size,
                                'train_param_inducing': train_param_inducing,
-                               'num_param_inducing': num_param_inducing
+                               'num_param_inducing': num_param_inducing,
+                               'namespace': aqua_namespace
                               }
                           ])
     nodes.append(online_planner)

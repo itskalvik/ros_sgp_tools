@@ -29,9 +29,12 @@ class GPS(SensorCallback):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
 
 class DVL(SensorCallback):
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/dvl/position_estimate"
+
     def get_subscriber(self, node_obj, callback_group=None):
         sub =  Subscriber(node_obj, PoseWithCovarianceStamped,
-                          "/aqua/dvl/position_estimate",
+                          self.topic,
                           qos_profile=qos_profile_sensor_data,
                           callback_group=callback_group)
         return sub
@@ -42,8 +45,8 @@ class DVL(SensorCallback):
                          msg.pose.pose.position.z])
 
 class AquaPing2(SensorCallback):
-    def __init__(self):
-        self.topic = "/aqua/depth"
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/depth"
 
     def get_subscriber(self, node_obj, callback_group=None):
         sub = Subscriber(node_obj, Odometry, 

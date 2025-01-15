@@ -6,6 +6,7 @@ from ros_sgp_tools.srv import Waypoints
 from ros_sgp_tools.msg import ETA
 from threading import Thread
 from rclpy.node import Node
+from time import sleep
 import numpy as np
 import rclpy
 
@@ -80,12 +81,14 @@ class IPPMissionPlanner(AquaController):
     def mission(self):
         while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
+        sleep(1.0)
+        rclpy.spin_once(self, timeout_sec=1.0)
 
         for i in range(len(self.waypoints)):
+            self.get_logger().info(f'Visiting Waypoint: {i}')        
             self.eta_msg.current_waypoint = i
             self.go2waypoint(np.round(self.waypoints[i, :2]))
-
-        self.get_logger().info('Mission complete')
+        self.get_logger().info('Mission Complete')
 
 def spin_srv(executor):
     try:
