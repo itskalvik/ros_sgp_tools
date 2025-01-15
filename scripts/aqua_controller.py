@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+import utm
+import json
 import time
 import numpy as np
 from collections import deque
@@ -7,6 +9,13 @@ from nav_msgs.msg import Odometry
 import rclpy
 from aqua2_navigation.swimmer import SwimmerAPI
 
+
+# Extract geofence and home location from QGC plan file
+def get_mission_plan(fname):
+    with open(fname, "r") as infile:
+        data = json.load(infile)
+        waypoints = data['mission']['items'][1]['TransectStyleComplexItem']['VisualTransectPoints']
+    return np.array(waypoints)[::2]
 
 class AquaController(SwimmerAPI):
 
@@ -35,6 +44,11 @@ class AquaController(SwimmerAPI):
                                  '/aqua/dvl/velocity',
                                  self.vehicle_odom_callback, 1)
         
+        # Declare parameters
+        self.declare_parameter('geofence_plan', '')
+        self.geofence_plan = self.get_parameter('geofence_plan').get_parameter_value().string_value
+        self.get_logger().info(f'Geofence Plan: {self.geofence_plan}')
+        
     def vehicle_odom_callback(self, msg):
         """Callback function for vehicle odom topic subscriber.
         Computes nominal linear velocity"""
@@ -55,21 +69,25 @@ class AquaController(SwimmerAPI):
             rclpy.spin_once(self, timeout_sec=1.0)
 
     def mission(self):
-        self.get_logger().info('Visiting waypoint 1')
-        if self.go2waypoint([-5.0, 0.0]):
-            self.get_logger().info('Reached waypoint 1')
+        if len(self.geofence_plan) > 0:
+            waypoints = get_mission_plan(self.geofence_plan)
+            waypoints = utm.from_latlon(waypoints[:, 0], waypoints[:, 1])
+            waypoints = np.vstack([waypoints[0], waypoints[1]]).T
+            waypoints -= waypoints[0]
+            waypoints = np.round(waypoints)
+        else:
+            waypoints = [[0.0, 0.0],
+                         [5.0, 0.0],
+                         [5.0, 5.0],
+                         [0.0, 5.0],
+                         [0.0, 0.0]]
 
-        self.get_logger().info('Visiting waypoint 2')
-        if self.go2waypoint([5.0, 5.0]):
-            self.get_logger().info('Reached waypoint 3')
-
-        self.get_logger().info('Visiting waypoint 3')
-        if self.go2waypoint([0.0, 5.0]):
-            self.get_logger().info('Reached waypoint 3')
-
-        self.get_logger().info('Visiting waypoint 4')
-        if self.go2waypoint([0.0, 0.0]):
-            self.get_logger().info('Reached waypoint 4')
+        for i in range(len(waypoints)):
+            self.get_logger().info(f'Visiting waypoint {i}')
+            if self.go2waypoint(waypoints[i]):
+                self.get_logger().info(f'Reached waypoint {i}')
+        self.get_logger().info(f'Mission Complete!')
+            
 
 def main():
     node = AquaController()
