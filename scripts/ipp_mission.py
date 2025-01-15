@@ -31,9 +31,6 @@ class IPPMissionPlanner(MissionPlanner):
         while rclpy.ok() and self.waypoints is None:
             rclpy.spin_once(self, timeout_sec=1.0)
 
-        self.distances = self.haversine(self.waypoints[1:], 
-                                        self.waypoints[:-1])
-
         # Setup timers
         self.eta_timer = self.create_timer(1, self.publish_eta)
 
@@ -61,6 +58,8 @@ class IPPMissionPlanner(MissionPlanner):
                 return response
         
         self.waypoints = waypoints
+        self.distances = self.haversine(self.waypoints[1:], 
+                                        self.waypoints[:-1])
         self.get_logger().info('Waypoints received and accepted')
         response.success = True
         return response
