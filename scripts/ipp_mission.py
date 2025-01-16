@@ -70,7 +70,9 @@ class IPPMissionPlanner(AquaController):
         idx = self.eta_msg.current_waypoint-1
         if idx < 0:
             return
-        self.distances[idx] = self.waypoint_distance
+        waypoint_distance = self.distance_to_target
+        if np.isfinite(waypoint_distance):
+            self.distances[idx] = waypoint_distance
         waypoints_eta = self.distances/self.velocity
         self.eta_msg.eta = []
         for i in range(len(waypoints_eta)):

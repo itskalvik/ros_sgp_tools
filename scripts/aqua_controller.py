@@ -59,7 +59,6 @@ class AquaController(SwimmerAPI):
         if velocity > 0.2:
             self.velocity_buffer.append(velocity)
         self.velocity = np.mean(self.velocity_buffer)
-        self.waypoint_distance = self.distance_to_target
 
     def go2waypoint(self, goal):
         self.swim_to_wp(speed=1.0, depth=5.0, 
