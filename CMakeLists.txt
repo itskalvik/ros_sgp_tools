@@ -44,6 +44,7 @@ install(PROGRAMS
   scripts/ipp_mission.py
   scripts/lake_depth_publisher.py
   scripts/data_visualizer.py
+  scripts/aipp_service.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
