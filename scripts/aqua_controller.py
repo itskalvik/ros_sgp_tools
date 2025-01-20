@@ -36,12 +36,12 @@ class AquaController(SwimmerAPI):
         # Sets the Robot's Autopilot to depth mode. In depth mode, the Robot will ignore pitch and roll targets.
         self.set_autopilot_mode("depth")
 
-        self.set_acceptance_radius(1.5)
+        self.set_acceptance_radius(1.1)
 
         self.velocity = 0.01
         self.velocity_buffer = deque([0.01])
         self.create_subscription(Odometry, 
-                                 '/aqua/dvl/velocity',
+                                 '/a14/navigation/local_position',
                                  self.vehicle_odom_callback, 1)
         
         # Declare parameters
@@ -61,7 +61,7 @@ class AquaController(SwimmerAPI):
         self.velocity = np.mean(self.velocity_buffer)
 
     def go2waypoint(self, goal):
-        self.swim_to_wp(speed=1.0, depth=5.0, 
+        self.swim_to_wp(speed=1.0, depth=0.5, 
                         x=goal[0], y=goal[1], 
                         blocking=False)
         while not self.is_at_waypoint():
@@ -69,20 +69,23 @@ class AquaController(SwimmerAPI):
 
     def mission(self):
         if len(self.geofence_plan) > 0:
+            self.get_logger().info(f'{self.geofence_plan}')
             waypoints = get_mission_plan(self.geofence_plan)
             waypoints = utm.from_latlon(waypoints[:, 0], waypoints[:, 1])
             waypoints = np.vstack([waypoints[0], waypoints[1]]).T
             waypoints -= waypoints[0]
             waypoints = np.round(waypoints)
         else:
-            waypoints = [[0.0, 0.0],
-                         [5.0, 0.0],
-                         [5.0, 5.0],
-                         [0.0, 5.0],
-                         [0.0, 0.0]]
+            waypoints = [[0.0, 10.0],
+                         [2.0, 10.0],
+                         [2.0, 0.0],
+                         [4.0, 0.0],
+                         [4.0, 10.0],
+                         [6.0, 10.0],
+                         [6.0, 0.0]]
 
         for i in range(len(waypoints)):
-            self.get_logger().info(f'Visiting waypoint {i}')
+            self.get_logger().info(f'Visiting waypoint {i}: {waypoints[i]}')
             if self.go2waypoint(waypoints[i]):
                 self.get_logger().info(f'Reached waypoint {i}')
         self.get_logger().info(f'Mission Complete!')
