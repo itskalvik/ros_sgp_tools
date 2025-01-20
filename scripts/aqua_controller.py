@@ -60,9 +60,10 @@ class AquaController(SwimmerAPI):
             self.velocity_buffer.append(velocity)
         self.velocity = np.mean(self.velocity_buffer)
 
-    def go2waypoint(self, goal):
-        self.swim_to_wp(speed=1.0, depth=0.5, 
-                        x=goal[0], y=goal[1], 
+    def go2waypoint(self, goal, speed=1.0, depth=0.5):
+        # Aqua's forward direction is aligned with the y-axis
+        self.swim_to_wp(speed=speed, depth=depth, 
+                        x=goal[1], y=goal[0], 
                         blocking=False)
         while not self.is_at_waypoint():
             rclpy.spin_once(self, timeout_sec=1.0)
@@ -76,18 +77,17 @@ class AquaController(SwimmerAPI):
             waypoints -= waypoints[0]
             waypoints = np.round(waypoints)
         else:
-            waypoints = [[0.0, 10.0],
-                         [2.0, 10.0],
-                         [2.0, 0.0],
-                         [4.0, 0.0],
-                         [4.0, 10.0],
-                         [6.0, 10.0],
-                         [6.0, 0.0]]
+            waypoints = [[10.0, 0.0],
+                         [10.0, 2.0],
+                         [0.0,  2.0],
+                         [0.0,  4.0],
+                         [10.0, 4.0],
+                         [10.0, 6.0],
+                         [0.0,  6.0]]
 
         for i in range(len(waypoints)):
-            self.get_logger().info(f'Visiting waypoint {i}: {waypoints[i]}')
-            if self.go2waypoint(waypoints[i]):
-                self.get_logger().info(f'Reached waypoint {i}')
+            self.get_logger().info(f'Visiting waypoint {i}')
+            self.go2waypoint(waypoints[i])
         self.get_logger().info(f'Mission Complete!')
             
 
