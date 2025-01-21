@@ -8,7 +8,7 @@ import os
 import h5py
 import numpy as np
 from sgptools.utils.gpflow import *
-from utils import CustomStandardScaler, point_cloud
+from utils import StandardScaler, point_cloud
 from sgptools.utils.misc import ploygon2candidats
 
 tf.random.set_seed(2024)
@@ -57,7 +57,7 @@ class DataVisualizer(Node):
         # Normalize the candidates
         X_candidates = ploygon2candidats(self.fence_vertices, 
                                          num_samples=self.num_samples)
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = StandardScaler()
         self.X_scaler.fit(X_candidates)
         self.X_scaler.scale_ *= 0.35
         X_candidates = self.X_scaler.transform(X_candidates)    

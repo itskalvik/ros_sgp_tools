@@ -48,7 +48,7 @@ class AIPPService(Node):
         self.srv = self.create_service(Empty, 'aipp_service', 
                                        self.callback)
         self.started = False
-        fname = f"/home/aqua/IndependentRobotics/bags/IPP_mission_log-{strftime('%H-%M-%S', gmtime())}.log"
+        fname = f"IPP_mission_log-{strftime('%H-%M-%S', gmtime())}.log"
         self.r_launch = RLaunch(log_path=fname)
 
     def callback(self, request, response):
