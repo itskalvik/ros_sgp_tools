@@ -60,7 +60,7 @@ class AquaController(SwimmerAPI):
             self.velocity_buffer.append(velocity)
         self.velocity = np.mean(self.velocity_buffer)
 
-    def go2waypoint(self, goal, speed=1.0, depth=0.5):
+    def go2waypoint(self, goal, speed=0.5, depth=0.5):
         # Aqua's forward direction is aligned with the y-axis
         self.swim_to_wp(speed=speed, depth=depth, 
                         x=goal[1], y=goal[0], 
