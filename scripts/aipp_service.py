@@ -17,7 +17,7 @@ class RLaunch:
             self.stderr = subprocess.STDOUT
             self.stdin = subprocess.PIPE
         else:
-            log_file = open(log_path, 'a')
+            log_file = open(log_path, 'a+')
             self.stdout = log_file
             self.stderr = log_file
             self.stdin = subprocess.DEVNULL
