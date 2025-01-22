@@ -24,6 +24,7 @@ from utils import StandardScaler
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
 from ros_sgp_tools.msg import ETA
+from nav_msgs.msg import Odometry
 
 import rclpy
 from rclpy.node import Node
@@ -95,7 +96,9 @@ class OnlineIPP(Node):
         self.current_waypoint = -1
         self.lock = Lock()
         self.runtime_est = None
-        
+        self.odom = None
+        self.depth = None
+
         # Setup the service to receive the waypoints and X_train data
         srv = self.create_service(IPP, 'offlineIPP', 
                                   self.offlineIPP_service_callback)
@@ -126,31 +129,39 @@ class OnlineIPP(Node):
                                  QoSProfile(depth=10))
 
         # Setup data subscribers
-        sensors_module = importlib.import_module('sensors')
-        self.sensors = []
-        sensor_subscribers = []
-        sensor_group = ReentrantCallbackGroup()
-
-        data_obj = getattr(sensors_module, 'DVL')(namespace=self.namespace)
-        self.sensors.append(data_obj)
-        sensor_subscribers.append(data_obj.get_subscriber(self,
-                                                          callback_group=sensor_group))
-
-        if self.data_type != 'Altitude':
-            data_obj = getattr(sensors_module, self.data_type)(namespace=self.namespace)
-            self.sensors.append(data_obj)
-            sensor_subscribers.append(data_obj.get_subscriber(self,
-                                                              callback_group=sensor_group))
-
-        self.time_sync = ApproximateTimeSynchronizer([*sensor_subscribers],
-                                                     queue_size=10, slop=0.1)
-        self.time_sync.registerCallback(self.data_callback)
+        sensor_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(Odometry, 
+                                 '/a14/navigation/local_position',
+                                 self.vehicle_odom_callback, 1)
+        self.create_subscription(Odometry, 
+                                 '/a14/depth',
+                                 self.vehicle_depth_callback, 1)
 
         # Setup the timer to update the parameters and waypoints
         # Makes sure only one instance runs at a time
-        timer_group = MutuallyExclusiveCallbackGroup()
+        timer1_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(5.0, self.update_with_data,
-                                       callback_group=timer_group)
+                                       callback_group=timer1_group)
+
+        timer2_group = MutuallyExclusiveCallbackGroup()
+        self.timer = self.create_timer(1.0/10, self.data_callback,
+                                       callback_group=timer2_group)
+
+    def data_callback(self, *args):
+        # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
+        if self.current_waypoint > -1 and self.current_waypoint != self.num_waypoints and \
+          self.odom is not None and self.depth is not None:
+            self.lock.acquire()
+            self.data_X.extend(self.odom)
+            self.data_y.extend([self.depth])
+            self.lock.release()
+
+    def vehicle_odom_callback(self, msg):
+        self.odom =  np.array([msg.pose.pose.position.x,
+                               msg.pose.pose.position.y])
+
+    def vehicle_depth_callback(self, msg):
+        self.depth =  msg.pose.pose.position.z
 
     '''
     Service callback to receive the waypoints, X_train, and sampling rate from offlineIPP node
@@ -234,23 +245,6 @@ class OnlineIPP(Node):
     def eta_callback(self, msg):
         self.current_waypoint = msg.current_waypoint
         self.eta = msg.eta
-
-    def data_callback(self, *args):
-        # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
-        if self.current_waypoint > 0 and self.current_waypoint != self.num_waypoints:
-            position = self.sensors[0].process_msg(args[0])
-            if len(args) == 1:
-                data_X = [position[:2]]
-                data_y = [position[2]]
-            else:
-                # position data is used by only a few sensors
-                data_X, data_y = self.sensors[1].process_msg(args[1], 
-                                                             position=position)
-
-            self.lock.acquire()
-            self.data_X.extend(data_X)
-            self.data_y.extend(data_y)
-            self.lock.release()
 
     def sync_waypoints(self, waypoints):
         # Send the new waypoints to the mission planner and 
