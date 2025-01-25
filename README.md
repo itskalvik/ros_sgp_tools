@@ -13,6 +13,19 @@ The [ros_sgp_tools](https://github.com/itskalvik/ros_sgp_tools) package provides
 
 ![Image title](.assets/ros2_ardupilot.png)
 
+## Package setup
+  ```
+  mkdir -p ~/ros2_ws/src
+  cd ~/ros2_ws/src
+  git clone https://github.com/itskalvik/ros_sgp_tools.git
+  cd ros_sgp_tools
+  python3 -m pip install -r requirements.txt
+  cd ~/ros2_ws
+  rosdep install --from-paths src --ignore-src -y
+  colcon build --symlink-install
+  source ~/ros2_ws/install/setup.bash
+  ```
+
 ## Running SGP-Tools Online/Adaptive IPP with Gazebo/ArduRover Simulator
 
 ![Image title](.assets/demo.png)
@@ -68,22 +81,4 @@ Alternatively, please follow the following instructions to configure the develop
   echo "export GZ_VERSION=garden" >> ~/.bashrc
   echo "export GZ_SIM_SYSTEM_PLUGIN_PATH=$HOME/ardupilot_gazebo/build:${GZ_SIM_SYSTEM_PLUGIN_PATH}" >> ~/.bashrc
   echo "export GZ_SIM_RESOURCE_PATH=$HOME/ardupilot_gazebo/models:$HOME/ardupilot_gazebo/worlds:$HOME/SITL_Models/Gazebo/models:$HOME/SITL_Models/Gazebo/worlds:$GZ_SIM_RESOURCE_PATH" >> ~/.bashrc
-  ```
-
-## Package setup
-
-- Install apt dependencies 
-  ```
-  sudo apt install ros-humble-mavros* ros-$ROS_DISTRO-cv-bridge
-  ```
-- Install pip dependencies 
-  ```
-  pip3 install -r requirements.txt
-  ```
-- Clone repo and build package
-  ```
-  cd ~/ros2_ws/src
-  git clone https://github.com/itskalvik/ros_sgp_tools.git
-  cd ..
-  colcon build --symlink-install
   ```

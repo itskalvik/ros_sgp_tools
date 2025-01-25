@@ -31,7 +31,6 @@ def generate_launch_description():
     train_param_inducing = True if get_var('TRAIN_PARAM_INDUCING', 'False')=='True' else False
     num_param_inducing = int(get_var('NUM_PARAM_INDUCING', 40))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
-    start_foxglove =  True if get_var('START_FOXGLOVE', 'False')=='True' else False
     fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     
@@ -42,7 +41,6 @@ def generate_launch_description():
     
     print("\nParameters:")
     print("===========")
-    print(f"NAMESPACE: {namespace}")
     print(f"DATA_TYPE: {data_type}")
     print(f"NUM_WAYPOINTS: {num_waypoints}")
     print(f"SAMPLING_RATE: {sampling_rate}")
@@ -50,7 +48,6 @@ def generate_launch_description():
     print(f"TRAIN_PARAM_INDUCING: {train_param_inducing}")
     print(f"NUM_PARAM_INDUCING': {num_param_inducing}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
-    print(f"START_FOXGLOVE: {start_foxglove}")
     print(f"FAKE_DATA: {fake_data}\n")
 
     nodes = []
@@ -107,25 +104,6 @@ def generate_launch_description():
                     ]
                 )
     nodes.append(mavros)
-
-    if start_foxglove:
-        foxglove = GroupAction(
-                        actions=[
-                            # push_ros_namespace to set namespace of included nodes
-                            PushRosNamespace(namespace),
-                            # Foxglove (web-based rviz)
-                            IncludeLaunchDescription(
-                                XMLLaunchDescriptionSource([
-                                    PathJoinSubstitution([
-                                        FindPackageShare('foxglove_bridge'),
-                                        'launch',
-                                        'foxglove_bridge_launch.xml'
-                                    ])
-                                ]),
-                            )
-                        ]
-                    )
-        nodes.append(foxglove)
    
     if fake_data and data_type=='SerialPing2':
         print("Publishing Fake Sonar Data")

@@ -67,11 +67,7 @@ class OnlineIPP(Node):
         self.declare_parameter('data_folder', '')
         self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
         self.get_logger().info(f'Data Folder: {self.data_folder}')
-
-        self.declare_parameter('visualize', False)
-        self.visualize = self.get_parameter('visualize').get_parameter_value().bool_value
-        self.get_logger().info(f'Visualize: {self.visualize}')
-
+        
         # Create sensor data h5py file
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
