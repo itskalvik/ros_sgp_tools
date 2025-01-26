@@ -1,16 +1,16 @@
 #! /usr/bin/env python3
 
-from guided_mission import MissionPlanner
+from mavros_control.waypoint_path_follower import WaypointPathFollower
 from ros_sgp_tools.srv import Waypoints
 from ros_sgp_tools.msg import ETA
 import numpy as np
 import rclpy
 
 
-class IPPMissionPlanner(MissionPlanner):
+class IPPPathFollower(WaypointPathFollower):
 
-    def __init__(self, use_altitude=False):
-        super().__init__(use_altitude=use_altitude)
+    def __init__(self):
+        super().__init__()
 
         # Setup current waypoint publisher that publishes at 10Hz
         self.eta_publisher = self.create_publisher(ETA, 'eta', 10)
@@ -93,7 +93,7 @@ class IPPMissionPlanner(MissionPlanner):
             self.get_logger().info('Armed')
 
         if self.use_altitude:
-            if self.takeoff(mission_altitude+20.0):
+            if self.tol_command(mission_altitude+20.0):
                 self.get_logger().info('Takeoff complete')
 
         for i in range(len(self.waypoints)):
@@ -105,7 +105,7 @@ class IPPMissionPlanner(MissionPlanner):
                 self.get_logger().info(f'Reached waypoint {i}')
 
         if self.use_altitude:
-            if self.land(mission_altitude):
+            if self.tol_command(mission_altitude):
                 self.get_logger().info('Landing complete')
 
         self.get_logger().info('Disarming')
@@ -117,8 +117,8 @@ class IPPMissionPlanner(MissionPlanner):
 
 def main(args=None):
     rclpy.init(args=args)
-    mission_planner = IPPMissionPlanner()
-    rclpy.spin_once(mission_planner)
+    path_follower = IPPPathFollower()
+    rclpy.spin_once(path_follower)
 
 if __name__ == '__main__':
     main()

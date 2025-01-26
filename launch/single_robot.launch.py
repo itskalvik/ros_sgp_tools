@@ -79,11 +79,11 @@ def generate_launch_description():
                           ])
     nodes.append(online_planner)
 
-    mission_planner = Node(package='ros_sgp_tools',
-                           executable='ipp_mission.py',
-                           namespace=namespace,
-                           name='IPPMission')
-    nodes.append(mission_planner)
+    path_follower = Node(package='ros_sgp_tools',
+                         executable='path_follower.py',
+                         namespace=namespace,
+                         name='PathFollower')
+    nodes.append(path_follower)
 
     mavros = GroupAction(
                     actions=[
