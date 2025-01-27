@@ -33,6 +33,7 @@ def generate_launch_description():
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
+    fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
     
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
@@ -93,18 +94,19 @@ def generate_launch_description():
                         IncludeLaunchDescription(
                             XMLLaunchDescriptionSource([
                                 PathJoinSubstitution([
-                                    FindPackageShare('ros_sgp_tools'),
+                                    FindPackageShare('mavros_control'),
                                     'launch',
                                     'mavros.launch'
                                 ])
                             ]),
                             launch_arguments={
+                                "fcu_url": fcu_url
                             }.items()
                         ),
                     ]
                 )
     nodes.append(mavros)
-   
+
     if fake_data and data_type=='SerialPing2':
         print("Publishing Fake Sonar Data")
         sensor = Node(package='ros_sgp_tools',
