@@ -34,7 +34,8 @@ def generate_launch_description():
     fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
-    
+    ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
+
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
                                           'launch', 'data',
@@ -49,7 +50,11 @@ def generate_launch_description():
     print(f"TRAIN_PARAM_INDUCING: {train_param_inducing}")
     print(f"NUM_PARAM_INDUCING': {num_param_inducing}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
-    print(f"FAKE_DATA: {fake_data}\n")
+    print(f"FAKE_DATA: {fake_data}")
+    print(f"FCU_URL: {fcu_url}")
+    if data_type=='Ping2':
+        print(f"PING2_PORT: {ping2_port}")
+    print('')
 
     nodes = []
 
@@ -116,7 +121,6 @@ def generate_launch_description():
         nodes.append(sensor)
 
     if data_type=='Ping2':
-        ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
         sensor = Node(package='ping_sonar_ros',
                       executable='ping1d_node',
                       name='Ping2',
