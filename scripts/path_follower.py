@@ -1,16 +1,17 @@
 #! /usr/bin/env python3
 
-from mavros_control.waypoint_path_follower import WaypointPathFollower
+from mavros_control.controller import Controller
 from ros_sgp_tools.srv import Waypoints
 from ros_sgp_tools.msg import ETA
 import numpy as np
 import rclpy
 
 
-class IPPPathFollower(WaypointPathFollower):
+class IPPPathFollower(Controller):
 
     def __init__(self):
-        super().__init__()
+        super().__init__(navigation_type=0,
+                         start_mission=False)
 
         # Setup current waypoint publisher that publishes at 10Hz
         self.eta_publisher = self.create_publisher(ETA, 'eta', 10)
@@ -69,7 +70,7 @@ class IPPPathFollower(WaypointPathFollower):
         if idx < 0:
             return
         self.distances[idx] = self.waypoint_distance
-        waypoints_eta = self.distances/self.velocity
+        waypoints_eta = self.distances/self.heading_velocity
         self.eta_msg.eta = []
         for i in range(len(waypoints_eta)):
             eta = -1. if i < idx else np.sum(waypoints_eta[idx:i+1])
