@@ -1,4 +1,4 @@
-from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image
+from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image, LaserScan
 from rclpy.qos import qos_profile_sensor_data, QoSProfile
 from message_filters import Subscriber
 from cv_bridge import CvBridge
@@ -39,6 +39,20 @@ class SerialPing2(SensorCallback):
     
     def process_msg(self, msg, position):
         return [position[:2]], [msg.range]
+    
+class GazeboPing2(SensorCallback):
+    def __init__(self):
+        self.topic = "ping2"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        sub = Subscriber(node_obj, LaserScan, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg, position):
+        return [position[:2]], [np.mean(msg.ranges)]
 
 class Ping2(SerialPing2):
     def __init__(self):

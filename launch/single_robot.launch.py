@@ -9,6 +9,9 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import GroupAction, IncludeLaunchDescription
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+
 
 def get_var(var, default):
     try:
@@ -24,14 +27,13 @@ def generate_launch_description():
 
     # Get parameter values
     namespace = get_var('NAMESPACE', 'robot_0')
-    data_type = get_var('DATA_TYPE' ,'SerialPing2')
+    data_type = get_var('DATA_TYPE' ,'GazeboPing2')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
     data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 100))
     train_param_inducing = True if get_var('TRAIN_PARAM_INDUCING', 'False')=='True' else False
     num_param_inducing = int(get_var('NUM_PARAM_INDUCING', 40))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
-    fake_data =  True if get_var('FAKE_DATA', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
     ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
@@ -50,7 +52,6 @@ def generate_launch_description():
     print(f"TRAIN_PARAM_INDUCING: {train_param_inducing}")
     print(f"NUM_PARAM_INDUCING': {num_param_inducing}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
-    print(f"FAKE_DATA: {fake_data}")
     print(f"FCU_URL: {fcu_url}")
     if data_type=='Ping2':
         print(f"PING2_PORT: {ping2_port}")
@@ -58,6 +59,7 @@ def generate_launch_description():
 
     nodes = []
 
+    # Offline IPP for initial path
     offline_planner = Node(package='ros_sgp_tools',
                            executable='offline_ipp.py',
                            name='OfflineIPP',
@@ -70,6 +72,7 @@ def generate_launch_description():
                            ])
     nodes.append(offline_planner)
 
+    # Online/Adaptive IPP
     online_planner = Node(package='ros_sgp_tools',
                           executable='online_ipp.py',
                           namespace=namespace,
@@ -85,17 +88,17 @@ def generate_launch_description():
                           ])
     nodes.append(online_planner)
 
+    # MAVROS controller
     path_follower = Node(package='ros_sgp_tools',
                          executable='path_follower.py',
                          namespace=namespace,
                          name='PathFollower')
     nodes.append(path_follower)
 
+    # MAVROS
     mavros = GroupAction(
                     actions=[
-                        # push_ros_namespace to set namespace of included nodes
                         PushRosNamespace(namespace),
-                        # MAVROS
                         IncludeLaunchDescription(
                             XMLLaunchDescriptionSource([
                                 PathJoinSubstitution([
@@ -112,15 +115,8 @@ def generate_launch_description():
                 )
     nodes.append(mavros)
 
-    if fake_data and data_type=='SerialPing2':
-        print("Publishing Fake Sonar Data")
-        sensor = Node(package='ros_sgp_tools',
-                      executable='lake_depth_publisher.py',
-                      name='FakeSonarData',
-                      namespace=namespace)
-        nodes.append(sensor)
-
     if data_type=='Ping2':
+        # Ping2 ROS package 
         sensor = Node(package='ping_sonar_ros',
                       executable='ping1d_node',
                       name='Ping2',
@@ -128,6 +124,15 @@ def generate_launch_description():
                       parameters=[
                         {'port': ping2_port}
                       ])
-        nodes.append(sensor)       
+        nodes.append(sensor)   
+    elif data_type=='GazeboPing2':
+        # Gazebo ROS Bridge
+        bridge = Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            arguments=[f'ping2@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan'],
+            namespace=namespace
+        )
+        nodes.append(bridge)         
 
     return LaunchDescription(nodes)
