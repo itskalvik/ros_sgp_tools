@@ -1,54 +1,103 @@
 <?xml version="1.0" ?>
 <sdf version="1.6">
-  <world name="blueboat">
-
-    <!-- Base Gazebo plugins -->
-    <plugin
-        filename="gz-sim-physics-system"
-        name="gz::sim::systems::Physics">
+  <world name="waves">
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics">
     </plugin>
-    <plugin
-        filename="gz-sim-user-commands-system"
-        name="gz::sim::systems::UserCommands">
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+      <background_color>0.8 0.8 0.8</background_color>
     </plugin>
-    <plugin
-        filename="gz-sim-scene-broadcaster-system"
-        name="gz::sim::systems::SceneBroadcaster">
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster">
     </plugin>
-
-    <!-- IMU plugin manages all IMU sensors -->
-    <plugin filename="libgz-sim-imu-system.so"
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin filename="gz-sim-imu-system"
             name="gz::sim::systems::Imu">
     </plugin>
 
-    <!-- Buoyancy plugin manages buoyancy for all models -->
-    <plugin
-        filename="gz-sim-buoyancy-system"
-        name="gz::sim::systems::Buoyancy">
-      <!-- Fluid density is 1 (air) above 0 and 1000 (water) below 0 -->
-      <graded_buoyancy>
-        <default_density>1000</default_density>
-        <density_change>
-          <above_depth>0</above_depth>
-          <density>1</density>
-        </density_change>
-      </graded_buoyancy>
-      <!-- Enable by model name -->
-      <enable>blueboat_approx</enable>
-    </plugin>
+    <scene>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.8 0.8 0.8</background>
+      <sky></sky>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.6 0.6 0.6 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- ENU axes -->
+    <model name="axes">
+      <static>1</static>
+      <link name="link">
+        <visual name="r">
+          <cast_shadows>0</cast_shadows>
+          <pose>5 0 0.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>10 0.01 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+            <emissive>1 0 0 1</emissive>
+            <specular>0.5 0.5 0.5 1</specular>
+          </material>
+        </visual>
+        <visual name="g">
+          <cast_shadows>0</cast_shadows>
+          <pose>0 5 0.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 10 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 1 0 1</ambient>
+            <diffuse>0 1 0 1</diffuse>
+            <emissive>0 1 0 1</emissive>
+            <specular>0.5 0.5 0.5 1</specular>
+          </material>
+        </visual>
+        <visual name="b">
+          <cast_shadows>0</cast_shadows>
+          <pose>0 0 5.1 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.01 0.01 10</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+            <emissive>0 0 1 1</emissive>
+            <specular>0.5 0.5 0.5 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
 
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Sun</uri>
+      <pose>0 0 0 0 0 0</pose>
+      <uri>model://calm_waves</uri>
+    </include>
+
+    <include>
+      <pose degrees="true">0 0 0 0 0 90</pose>
+      <uri>model://blueboat</uri>
     </include>
 
     <include>
       <uri>model://sand_heightmap</uri>
       <pose>0 7 -10 0 0 0</pose>
-    </include>
-
-    <include>
-      <pose degrees="true">0 0 0 0 0 90</pose>
-      <uri>model://blueboat_approx</uri>
     </include>
 
     <gui fullscreen="0">
@@ -149,6 +198,10 @@
         <real_time>true</real_time>
         <real_time_factor>true</real_time_factor>
         <iterations>true</iterations>
+      </plugin>
+
+      <!-- Plugin to visualize lidar rays/points -->
+      <plugin filename="VisualizeLidar" name="Visualize Lidar">
       </plugin>
 
       <!-- Entity tree -->
