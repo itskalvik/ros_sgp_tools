@@ -139,7 +139,8 @@ class OnlineIPP(Node):
                                                               callback_group=sensor_group))
 
         self.time_sync = ApproximateTimeSynchronizer([*sensor_subscribers],
-                                                     queue_size=10, slop=0.1)
+                                                     queue_size=10, slop=0.1,
+                                                     sync_arrival_time=True)
         self.time_sync.registerCallback(self.data_callback)
 
         # Setup the timer to update the parameters and waypoints
@@ -275,8 +276,8 @@ class OnlineIPP(Node):
 
             # Make local copies of the data and clear the data buffers         
             self.lock.acquire()
-            data_X = np.array(self.data_X).reshape(-1, 2)
-            data_y = np.array(self.data_y).reshape(-1, 1)
+            data_X = np.array(self.data_X).reshape(-1, 2).astype(float)
+            data_y = np.array(self.data_y).reshape(-1, 1).astype(float)
             self.data_X = []
             self.data_y = []
             self.lock.release()
