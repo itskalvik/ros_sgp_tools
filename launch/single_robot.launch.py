@@ -30,7 +30,7 @@ def generate_launch_description():
     data_type = get_var('DATA_TYPE' ,'GazeboPing2')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
-    data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 100))
+    data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 200))
     train_param_inducing = True if get_var('TRAIN_PARAM_INDUCING', 'False')=='True' else False
     num_param_inducing = int(get_var('NUM_PARAM_INDUCING', 40))
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
