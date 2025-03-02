@@ -97,7 +97,7 @@
 
     <include>
       <uri>model://sand_heightmap</uri>
-      <pose>0 7 -10 0 0 0</pose>
+      <pose>0 7 -20 0 0 0</pose>
     </include>
 
     <gui fullscreen="0">

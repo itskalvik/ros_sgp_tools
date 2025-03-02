@@ -333,7 +333,6 @@ class OnlineIPP(Node):
 
             self.plot_paths(fname, self.waypoints,
                             self.X_scaler.transform(data_X),
-                            inducing_pts=self.param_model.inducing_variable.Z.numpy(),
                             update_waypoint=update_waypoint)
 
             # Shutdown the online planner if the mission planner has shutdown
@@ -438,7 +437,7 @@ class OnlineIPP(Node):
             plt.scatter(inducing_pts[:, 0], inducing_pts[:, 1], 
                         label='Inducing Pts', marker='.', c='g', zorder=4, s=2)
 
-        plt.legend()
+        plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
         plt.savefig(os.path.join(self.data_folder, 
                                  f'{fname}.png'),
                                  bbox_inches='tight')
