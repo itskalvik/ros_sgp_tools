@@ -10,11 +10,17 @@ except ImportError:
     pass
 
 # Extract geofence and home location from QGC plan file
-def get_mission_plan(fname):
+def get_mission_plan(fname, get_waypoints=False):
     with open(fname, "r") as infile:
         data = json.load(infile)
         vertices = np.array(data['geoFence']['polygons'][0]['polygon'])
         home_position = data['mission']['plannedHomePosition']
+        if get_waypoints:
+            waypoints = []
+            for waypoint in data['mission']['items'][1]['TransectStyleComplexItem']['Items']:
+                if waypoint['command']==16:
+                    waypoints.append(waypoint['params'][4:7])
+            return vertices, home_position, np.array(waypoints)
     return vertices, home_position
 
 def point_cloud(points, parent_frame):
