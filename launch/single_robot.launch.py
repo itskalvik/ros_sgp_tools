@@ -37,7 +37,7 @@ def generate_launch_description():
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
     ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
-    kernel = get_var('KERNEL', 'None')
+    kernel = get_var('KERNEL', 'RBF')
 
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
@@ -62,6 +62,7 @@ def generate_launch_description():
     nodes = []
 
     # Offline IPP for initial path
+    offline_kernel = 'None' if kernel is 'None' else 'RBF'
     offline_planner = Node(package='ros_sgp_tools',
                            executable='offline_ipp.py',
                            name='OfflineIPP',
@@ -70,7 +71,7 @@ def generate_launch_description():
                                  'num_robots': num_robots,
                                  'sampling_rate': sampling_rate,
                                  'geofence_plan': geofence_plan,
-                                 'kernel': kernel
+                                 'kernel': offline_kernel
                                 }
                            ])
     nodes.append(offline_planner)
@@ -86,7 +87,8 @@ def generate_launch_description():
                                'data_folder': data_folder,
                                'data_buffer_size': data_buffer_size,
                                'train_param_inducing': train_param_inducing,
-                               'num_param_inducing': num_param_inducing
+                               'num_param_inducing': num_param_inducing,
+                               'kernel': kernel
                               }
                           ])
     nodes.append(online_planner)

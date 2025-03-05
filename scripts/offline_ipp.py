@@ -12,6 +12,7 @@ from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
 from sgptools.kernels.attentive_kernel import AttentiveKernel
+from sgptools.kernels.neural_kernel import NeuralSpectralKernel
 
 from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
@@ -130,7 +131,11 @@ class offlineIPP(Node):
         elif self.kernel == 'Attentive':
             kernel = AttentiveKernel(np.linspace(0.1, 2.5, 4), 
                                      dim_hidden=10)
-
+        elif self.kernel == 'Neural':
+            kernel = NeuralSpectralKernel(input_dim=2, 
+                                          Q=3, 
+                                          hidden_sizes=[4, 4])
+            
         # Sample uniform random initial waypoints and compute initial paths
         # Sample one less waypoint per robot and add the home position as the first waypoint
         Xu_init = get_inducing_pts(self.X_candidates, (self.num_waypoints-1)*self.num_robots)

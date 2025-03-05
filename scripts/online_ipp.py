@@ -20,6 +20,8 @@ from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
 from sgptools.utils.tsp import resample_path
 from utils import CustomStandardScaler
+from sgptools.kernels.attentive_kernel import AttentiveKernel
+from sgptools.kernels.neural_kernel import NeuralSpectralKernel
 
 from ros_sgp_tools.srv import Waypoints, IPP
 from geometry_msgs.msg import Point
@@ -68,6 +70,11 @@ class OnlineIPP(Node):
         self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
         self.get_logger().info(f'Data Folder: {self.data_folder}')
         
+        self.declare_parameter('kernel', 'RBF')
+        self.kernel = self.get_parameter('kernel').get_parameter_value().string_value
+        self.get_logger().info(f'Kernel: {self.kernel}')
+        self.kernel = None if self.kernel=='None' else self.kernel
+
         # Create sensor data h5py file
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
@@ -102,7 +109,8 @@ class OnlineIPP(Node):
 
         # Init the sgp models for online IPP and parameter estimation
         self.num_waypoints = len(self.waypoints)
-        self.init_sgp_models()
+        if self.kernel is not None:
+            self.init_sgp_models()
         
         # Sync the waypoints with the mission planner
         self.waypoints_service = self.create_client(Waypoints, 'waypoints')
@@ -201,12 +209,20 @@ class OnlineIPP(Node):
     def init_sgp_models(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        lengthscales = 0.1
-        variance = 0.5
 
+        # Initilize the kernel
+        if self.kernel == 'RBF':
+            kernel = gpflow.kernels.RBF(lengthscales=0.1, 
+                                        variance=0.5)
+        elif self.kernel == 'Attentive':
+            kernel = AttentiveKernel(np.linspace(0.1, 2.5, 4), 
+                                     dim_hidden=10)
+        elif self.kernel == 'Neural':
+            kernel = NeuralSpectralKernel(input_dim=2, 
+                                          Q=3, 
+                                          hidden_sizes=[4, 4])
+            
         # Initilize SGP for IPP with path received from offline IPP node
-        kernel = gpflow.kernels.RBF(lengthscales=lengthscales, 
-                                    variance=variance)
         self.transform = IPPTransform(n_dim=self.n_dim,
                                       sampling_rate=self.sampling_rate,
                                       num_robots=1)
@@ -221,8 +237,7 @@ class OnlineIPP(Node):
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_candidates, 
                                       num_inducing=self.num_param_inducing, 
-                                      lengthscales=lengthscales, 
-                                      variance=variance, 
+                                      kernel=kernel, 
                                       noise_variance=likelihood_variance)
 
     '''
@@ -283,23 +298,26 @@ class OnlineIPP(Node):
             self.lock.release()
 
             # Update the parameters
-            start_time = self.get_clock().now().to_msg().sec
-            self.update_param(self.X_scaler.transform(data_X), data_y)
-            end_time = self.get_clock().now().to_msg().sec
-            self.get_logger().info(f'Param update time: {end_time-start_time} secs')
-            # Store the initial IPP runtime estimate
-            if self.runtime_est is None: 
-                self.runtime_est = end_time-start_time
+            if self.kernel is not None:
+                start_time = self.get_clock().now().to_msg().sec
+                self.update_param(self.X_scaler.transform(data_X), data_y)
+                end_time = self.get_clock().now().to_msg().sec
+                self.get_logger().info(f'Param update time: {end_time-start_time} secs')
+                # Store the initial IPP runtime estimate
+                if self.runtime_est is None: 
+                    self.runtime_est = end_time-start_time
 
-            # Update the waypoints
-            start_time = self.get_clock().now().to_msg().sec
-            new_waypoints, update_waypoint = self.update_waypoints()
-            end_time = self.get_clock().now().to_msg().sec
-            runtime = end_time-start_time
-            self.get_logger().info(f'IPP update time: {runtime} secs')
-            # Store the IPP runtime upper bound
-            if self.runtime_est < runtime:
-                self.runtime_est = runtime
+                # Update the waypoints
+                start_time = self.get_clock().now().to_msg().sec
+                new_waypoints, update_waypoint = self.update_waypoints()
+                end_time = self.get_clock().now().to_msg().sec
+                runtime = end_time-start_time
+                self.get_logger().info(f'IPP update time: {runtime} secs')
+                # Store the IPP runtime upper bound
+                if self.runtime_est < runtime:
+                    self.runtime_est = runtime
+            else:
+                update_waypoint = -1
 
             # Sync the waypoints with the mission planner
             if update_waypoint != -1:
@@ -326,9 +344,6 @@ class OnlineIPP(Node):
                                                     self.waypoints.shape, 
                                                     dtype=np.float32,
                                                     data=lat_lon_waypoints)
-                dset.attrs['lengthscales'] = self.param_model.kernel.lengthscales.numpy()
-                dset.attrs['variance'] = self.param_model.kernel.variance.numpy()
-                dset.attrs['likelihood_variance'] = self.param_model.likelihood.variance.numpy()
                 dset.attrs['update_waypoint'] = update_waypoint
 
             self.plot_paths(fname, self.waypoints,
@@ -385,8 +400,8 @@ class OnlineIPP(Node):
         # Resample the path to the number of inducing points
         inducing_variable = resample_path(inducing_variable, 
                                           self.num_param_inducing)
-        #self.param_model.update((X_new, y_new), 
-        #                        inducing_variable=inducing_variable)
+        self.param_model.update((X_new, y_new), 
+                                inducing_variable=inducing_variable)
         
         if self.train_param_inducing:
             trainable_variables = None
@@ -398,8 +413,9 @@ class OnlineIPP(Node):
                        optimizer='scipy',
                        method='CG')
         
-        self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
-        self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
+        if self.kernel == 'RBF':
+            self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
+            self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
         self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
 
     def get_update_waypoint(self):
