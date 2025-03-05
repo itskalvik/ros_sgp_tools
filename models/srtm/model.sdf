@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+  <model name="srtm">
+    <static>true</static>
+    <link name="link">
+      <collision name="ground">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>5.1 5.1 5.1</scale>
+            <uri>model://srtm/meshes/srtm.stl</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="ground_sand">
+        <cast_shadows>true</cast_shadows>
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>5.1 5.1 5.1</scale>
+            <uri>model://srtm/meshes/srtm.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.1 0.1 0.1 0.1</specular>
+          <pbr>
+            <metal>
+              <albedo_map>materials/soil_sand_0045_01.jpg</albedo_map>
+              <normal_map>materials/flat_normal.png</normal_map>
+              <roughness>0.9</roughness>
+              <metalness>0.01</metalness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
