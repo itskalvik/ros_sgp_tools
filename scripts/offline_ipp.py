@@ -11,6 +11,7 @@ from sgptools.utils.tsp import run_tsp
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sklearn.neighbors import KNeighborsClassifier
+from sgptools.kernels.attentive_kernel import AttentiveKernel
 
 from ros_sgp_tools.srv import IPP
 from geometry_msgs.msg import Point
@@ -41,6 +42,8 @@ class offlineIPP(Node):
                              When greater than 2, the model approximates a continuous sensing
                              model with the given number of sampling rate. 
         geofence_plan (str): File path to a GCS plan file with a polygon geofence and a launch position.
+        kernel (str): Kernel function used for path planning (RBF, Attentive). Setting it to None will disable IPP and 
+                      use waypoints from mission.plan file
     """
     def __init__(self):
         super().__init__('OfflineIPP')
@@ -71,6 +74,11 @@ class offlineIPP(Node):
         if self.sampling_rate < 2:
             raise Exception('Sampling rate needs to be greater than 1!')
 
+        self.declare_parameter('kernel', 'RBF')
+        self.kernel = self.get_parameter('kernel').get_parameter_value().string_value
+        self.get_logger().info(f'Kernel: {self.kernel}')
+        self.kernel = None if self.kernel=='None' else self.kernel
+
         plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
                                                               'launch', 
                                                               'sample.plan')
@@ -78,8 +86,15 @@ class offlineIPP(Node):
         plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
         self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
 
-        # Get the data and normalize 
-        self.fence_vertices, home_position = get_mission_plan(plan_fname)
+        # Get the data and normalize
+        if self.kernel is None:
+            self.fence_vertices, home_position, waypoints = get_mission_plan(plan_fname, 
+                                                                             get_waypoints=True)
+            waypoints = waypoints[:, :2]
+        else:
+            self.fence_vertices, home_position = get_mission_plan(plan_fname,
+                                                                  get_waypoints=False)  
+                 
         self.X_candidates = ploygon2candidats(self.fence_vertices, num_samples=5000)
         self.X_candidates = np.array(self.X_candidates).reshape(-1, 2)
         self.X_scaler = CustomStandardScaler()
@@ -94,7 +109,11 @@ class offlineIPP(Node):
         self.home_position = self.X_scaler.transform(home_position)
 
         # Get initial solution paths
-        self.compute_init_paths()
+        if self.kernel is None:
+            self.waypoints = self.X_scaler.transform(waypoints).reshape(1, -1, 2)
+            self.data = self.X_candidates.reshape(1, -1, 2)
+        else:
+            self.compute_init_paths()
 
         # Sync the waypoints with the trajectory planner
         self.sync_waypoints()
@@ -104,8 +123,13 @@ class offlineIPP(Node):
     def compute_init_paths(self):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
-        kernel = gpflow.kernels.RBF(lengthscales=0.1, 
-                                    variance=0.5)
+            
+        if self.kernel == 'RBF':
+            kernel = gpflow.kernels.RBF(lengthscales=0.1, 
+                                        variance=0.5)
+        elif self.kernel == 'Attentive':
+            kernel = AttentiveKernel(np.linspace(0.1, 2.5, 4), 
+                                     dim_hidden=10)
 
         # Sample uniform random initial waypoints and compute initial paths
         # Sample one less waypoint per robot and add the home position as the first waypoint
@@ -229,7 +253,7 @@ class offlineIPP(Node):
                 train_pts = self.X_scaler.inverse_transform(np.array(train_pts))
                 for point in train_pts:
                     request.data.x_candidates.append(Point(x=point[0],
-                                                      y=point[1]))
+                                                           y=point[1]))
 
                 for point in self.fence_vertices:
                     request.data.fence_vertices.append(Point(x=point[0],

@@ -385,8 +385,8 @@ class OnlineIPP(Node):
         # Resample the path to the number of inducing points
         inducing_variable = resample_path(inducing_variable, 
                                           self.num_param_inducing)
-        self.param_model.update((X_new, y_new), 
-                                inducing_variable=inducing_variable)
+        #self.param_model.update((X_new, y_new), 
+        #                        inducing_variable=inducing_variable)
         
         if self.train_param_inducing:
             trainable_variables = None

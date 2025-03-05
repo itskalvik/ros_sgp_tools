@@ -37,6 +37,7 @@ def generate_launch_description():
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
     ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
+    kernel = get_var('KERNEL', 'None')
 
     num_robots = 1
     geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
@@ -52,6 +53,7 @@ def generate_launch_description():
     print(f"TRAIN_PARAM_INDUCING: {train_param_inducing}")
     print(f"NUM_PARAM_INDUCING': {num_param_inducing}")
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
+    print(f"KERNEL: {kernel}")
     print(f"FCU_URL: {fcu_url}")
     if data_type=='Ping2':
         print(f"PING2_PORT: {ping2_port}")
@@ -67,7 +69,8 @@ def generate_launch_description():
                                 {'num_waypoints': num_waypoints,
                                  'num_robots': num_robots,
                                  'sampling_rate': sampling_rate,
-                                 'geofence_plan': geofence_plan
+                                 'geofence_plan': geofence_plan,
+                                 'kernel': kernel
                                 }
                            ])
     nodes.append(offline_planner)
