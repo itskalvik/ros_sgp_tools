@@ -74,6 +74,7 @@ class OnlineIPP(Node):
         self.kernel = self.get_parameter('kernel').get_parameter_value().string_value
         self.get_logger().info(f'Kernel: {self.kernel}')
         self.kernel = None if self.kernel=='None' else self.kernel
+        self.kernel = None if not self.adaptive_ipp else self.kernel
 
         # Create sensor data h5py file
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
@@ -119,10 +120,6 @@ class OnlineIPP(Node):
         fname = f"waypoints_0-{strftime('%H-%M-%S', gmtime())}"
         self.plot_paths(fname, self.waypoints, update_waypoint=0)
         self.get_logger().info('Initial waypoints synced with the mission planner')
-        
-        if not self.adaptive_ipp:
-            self.get_logger().info('Running non-adaptive IPP, shutting down online planner')
-            rclpy.shutdown()
 
         # Setup the subscribers
         self.create_subscription(ETA, 'eta', 

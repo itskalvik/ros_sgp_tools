@@ -27,6 +27,11 @@ def generate_launch_description():
                                             description='Number of samples used to visualize the data')
     nodes.append(num_samples_arg)
 
+    # Kernel
+    kernel = DeclareLaunchArgument('kernel', default_value='RBF',
+                                   description='Kernel function used for terain estimation')
+    nodes.append(kernel)
+
     # Point cloud publisher
     pcd_publisher = Node(package='ros_sgp_tools',
                          executable='data_visualizer.py',
@@ -34,7 +39,8 @@ def generate_launch_description():
                          parameters=[
                             {'data_folder': data_folder,
                              'mission_log': LaunchConfiguration('mission_log'),
-                             'num_samples': LaunchConfiguration('num_samples')}
+                             'num_samples': LaunchConfiguration('num_samples'),
+                             'kernel': LaunchConfiguration('kernel')}
                          ])
     nodes.append(pcd_publisher)
 
