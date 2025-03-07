@@ -338,9 +338,9 @@ class OnlineIPP(Node):
             fname = f"waypoints_{current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
             if update_waypoint != -1:
                 dset = self.data_file.create_dataset(fname,
-                                                    self.waypoints.shape, 
-                                                    dtype=np.float32,
-                                                    data=lat_lon_waypoints)
+                                                     self.waypoints.shape, 
+                                                     dtype=np.float32,
+                                                     data=lat_lon_waypoints)
                 dset.attrs['update_waypoint'] = update_waypoint
 
             self.plot_paths(fname, self.waypoints,

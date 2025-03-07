@@ -6,6 +6,7 @@ import rclpy
 
 import os
 import h5py
+import pickle
 import numpy as np
 from utils import CustomStandardScaler, point_cloud, StandardScaler
 
@@ -79,17 +80,45 @@ class DataVisualizer(Node):
             kernel = gpflow.kernels.RBF(lengthscales=0.1, 
                                         variance=0.5)
         elif self.kernel == 'Attentive':
-            kernel = AttentiveKernel(np.linspace(0.1, 2.5, 5), 
+            kernel = AttentiveKernel(np.linspace(0.1, 2.5, 10), 
                                      dim_hidden=10)
         elif self.kernel == 'Neural':
             kernel = NeuralSpectralKernel(input_dim=2, 
-                                          Q=3, 
+                                          Q=5, 
                                           hidden_sizes=[4, 4])
+            
+        # Train GP only if pretrained weights are unavailable
+        fname = os.path.join(data_folder, mission_log, f"{self.kernel}Params.pkl")
+        if os.path.exists(fname):
+            with open(fname, 'rb') as handle:
+                params = pickle.load(handle)
+            max_steps = 0
+            self.get_logger().info('Found pre-trained parameters')
+        else:
+            max_steps = 1500
+            params = None
+            self.get_logger().info('Training from scratch')
+
         _, _, _, self.gpr_gt = get_model_params(self.X, self.y,
                                                 kernel=kernel,
                                                 return_gp=True,
-                                                train_inducing_pts=True)
-        
+                                                train_inducing_pts=True,
+                                                max_steps=max_steps)
+
+        # Load pre-trained parameters
+        if params is not None:
+            gpflow.utilities.multiple_assign(self.gpr_gt.kernel, params['kernel'])
+            gpflow.utilities.multiple_assign(self.gpr_gt.likelihood, params['likelihood'])
+
+        # Create parameter dict h5py file
+        if not os.path.exists(fname):
+            params_kernel = gpflow.utilities.parameter_dict(self.gpr_gt.kernel)
+            params_likelihood = gpflow.utilities.parameter_dict(self.gpr_gt.likelihood)
+            params = {'kernel': params_kernel, 
+                      'likelihood': params_likelihood}
+            with open(fname, 'wb') as handle:
+                pickle.dump(params, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         # Publish point cloud every 10 seconds
         self.create_timer(10, callback=self.timer_callback)
         self.get_logger().info('DataVisualizer node initialized')
