@@ -4,6 +4,7 @@ import os
 import time
 import h5py
 import importlib
+import traceback
 from threading import Lock
 
 from rclpy.executors import MultiThreadedExecutor
@@ -12,25 +13,29 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallb
 import matplotlib.pyplot as plt
 
 import gpflow
+from gpflow.utilities.traversal import deepcopy
+
 import numpy as np
 from time import gmtime, strftime
+
 from sgptools.utils.misc import project_waypoints
 from sgptools.models.continuous_sgp import *
 from sgptools.models.core.transformations import *
 from sgptools.models.core.osgpr import *
 from sgptools.utils.tsp import resample_path
-from utils import CustomStandardScaler
 from sgptools.kernels.attentive_kernel import AttentiveKernel
 from sgptools.kernels.neural_kernel import NeuralSpectralKernel
 
 from ros_sgp_tools.srv import Waypoints, IPP
-from geometry_msgs.msg import Point
 from ros_sgp_tools.msg import ETA
+from geometry_msgs.msg import Point
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+
 from message_filters import ApproximateTimeSynchronizer
+from utils import CustomStandardScaler
 
 import tensorflow as tf
 tf.random.set_seed(2024)
@@ -405,11 +410,21 @@ class OnlineIPP(Node):
         else:
             trainable_variables=self.param_model.trainable_variables[1:]
 
-        optimize_model(self.param_model,
-                       trainable_variables=trainable_variables,
-                       optimizer='scipy',
-                       method='CG')
-        
+        kernel = deepcopy(self.param_model.kernel)
+        likelihood = deepcopy(self.param_model.likelihood)
+
+        try:
+            optimize_model(self.param_model,
+                        trainable_variables=trainable_variables,
+                        optimizer='scipy',
+                        method='CG')
+        except Exception as e:
+            self.get_logger().info(f"Failed to update parameters")
+            self.get_logger().info(f"{traceback.format_exc()}")
+            self.get_logger().info(f"Reverting to last known stable parameters")
+            self.param_model.kernel = kernel
+            self.param_model.likelihood = likelihood
+
         if self.kernel == 'RBF':
             self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
             self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
