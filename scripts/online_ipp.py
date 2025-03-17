@@ -208,7 +208,7 @@ class OnlineIPP(Node):
         response.success = True
         return response
     
-    def init_sgp_models(self):
+    def init_sgp_models(self, IPP_model=True):
         # Initialize random SGP parameters
         likelihood_variance = 1e-4
 
@@ -225,16 +225,17 @@ class OnlineIPP(Node):
                                           hidden_sizes=[4, 4])
             
         # Initilize SGP for IPP with path received from offline IPP node
-        self.transform = IPPTransform(n_dim=self.n_dim,
-                                      sampling_rate=self.sampling_rate,
-                                      num_robots=1)
-        self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
-                                           self.X_candidates,
-                                           likelihood_variance,
-                                           kernel,
-                                           self.transform,
-                                           max_steps=0,
-                                           Xu_init=self.waypoints)
+        if IPP_model:
+            self.transform = IPPTransform(n_dim=self.n_dim,
+                                          sampling_rate=self.sampling_rate,
+                                          num_robots=1)
+            self.IPP_model, _ = continuous_sgp(self.num_waypoints, 
+                                               self.X_candidates,
+                                               likelihood_variance,
+                                               kernel,
+                                               self.transform,
+                                               max_steps=0,
+                                               Xu_init=self.waypoints)
         
         # Initialize the OSGPR model
         self.param_model = init_osgpr(self.X_candidates, 
@@ -410,20 +411,17 @@ class OnlineIPP(Node):
         else:
             trainable_variables=self.param_model.trainable_variables[1:]
 
-        kernel = deepcopy(self.param_model.kernel)
-        likelihood = deepcopy(self.param_model.likelihood)
-
         try:
             optimize_model(self.param_model,
-                        trainable_variables=trainable_variables,
-                        optimizer='scipy',
-                        method='CG')
+                           trainable_variables=trainable_variables,
+                           optimizer='scipy',
+                           method='CG')
         except Exception as e:
-            self.get_logger().info(f"Failed to update parameters")
+            # Failsafe for cholesky decomposition failure
             self.get_logger().info(f"{traceback.format_exc()}")
-            self.get_logger().info(f"Reverting to last known stable parameters")
-            self.param_model.kernel = kernel
-            self.param_model.likelihood = likelihood
+            self.get_logger().info(f"Failed to update parameter model")
+            self.get_logger().info(f"Resetting parameter model")
+            self.init_sgp_models(IPP_model=False)
 
         if self.kernel == 'RBF':
             self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
