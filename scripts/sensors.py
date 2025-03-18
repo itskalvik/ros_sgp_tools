@@ -42,7 +42,7 @@ class SerialPing1D(SensorCallback):
     
 class GazeboPing1D(SensorCallback):
     def __init__(self):
-        self.topic = "Ping1D"
+        self.topic = "ping1d"
 
     def get_subscriber(self, node_obj, callback_group=None):
         sub = Subscriber(node_obj, LaserScan, 

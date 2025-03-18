@@ -9,8 +9,6 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import GroupAction, IncludeLaunchDescription
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
-from ament_index_python.packages import get_package_share_directory
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def get_var(var, default):
@@ -36,7 +34,7 @@ def generate_launch_description():
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
-    ping_1d_port = get_var('PING_1D_PORT', '/dev/ttyUSB0')
+    ping1d_port = get_var('PING1D_PORT', '/dev/ttyUSB0')
     kernel = get_var('KERNEL', 'RBF')
 
     num_robots = 1
@@ -56,7 +54,7 @@ def generate_launch_description():
     print(f"KERNEL: {kernel}")
     print(f"FCU_URL: {fcu_url}")
     if data_type=='Ping1D':
-        print(f"PING_1D_PORT: {ping_1d_port}")
+        print(f"PING1D_PORT: {ping1d_port}")
     print('')
 
     nodes = []
@@ -128,7 +126,7 @@ def generate_launch_description():
                       name='Ping1D',
                       namespace=namespace,
                       parameters=[
-                        {'port': ping_1d_port}
+                        {'port': ping1d_port}
                       ])
         nodes.append(sensor)   
     elif data_type=='GazeboPing1D':
@@ -136,7 +134,7 @@ def generate_launch_description():
         bridge = Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            arguments=[f'ping_1d@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan'],
+            arguments=[f'ping1d@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan'],
             namespace=namespace
         )
         nodes.append(bridge)         
