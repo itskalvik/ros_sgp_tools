@@ -35,7 +35,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile
 
 from message_filters import ApproximateTimeSynchronizer
-from utils import CustomStandardScaler
+from utils import LatLonStandardScaler, StandardScaler
 
 import tensorflow as tf
 tf.random.set_seed(2024)
@@ -200,7 +200,7 @@ class OnlineIPP(Node):
         dset.attrs['sampling_rate'] = self.sampling_rate
 
         # Normalize the train set and waypoints
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_candidates)
         self.X_candidates = self.X_scaler.transform(self.X_candidates)
         self.waypoints = self.X_scaler.transform(self.waypoints)
@@ -303,7 +303,7 @@ class OnlineIPP(Node):
             # Update the parameters
             if self.kernel is not None:
                 start_time = self.get_clock().now().to_msg().sec
-                self.update_param(self.X_scaler.transform(data_X), data_y)
+                self.update_param(data_X, data_y)
                 end_time = self.get_clock().now().to_msg().sec
                 self.get_logger().info(f'Param update time: {end_time-start_time} secs')
                 # Store the initial IPP runtime estimate
@@ -392,6 +392,11 @@ class OnlineIPP(Node):
 
     def update_param(self, X_new, y_new):
         """Update the OSGPR parameters."""
+
+        # Normalize the data
+        X_new = self.X_scaler.transform(X_new)
+        y_new = StandardScaler().fit_transform(y_new)
+
         # Don't update the parameters if the current target is the last waypoint
         if self.current_waypoint >= self.num_waypoints-1:
             return
@@ -403,6 +408,8 @@ class OnlineIPP(Node):
         # Resample the path to the number of inducing points
         inducing_variable = resample_path(inducing_variable, 
                                           self.num_param_inducing)
+        
+        # Update ssgp with new batch of data
         self.param_model.update((X_new, y_new), 
                                 inducing_variable=inducing_variable)
         
@@ -425,7 +432,7 @@ class OnlineIPP(Node):
         if self.kernel == 'RBF':
             self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
             self.get_logger().info(f'SSGP kernel variance: {self.param_model.kernel.variance.numpy():.4f}')
-        self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
+            self.get_logger().info(f'SSGP likelihood variance: {self.param_model.likelihood.variance.numpy():.4f}')
 
     def get_update_waypoint(self):
         """Returns the waypoint index that is safe to update."""

@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 import os
-from utils import get_mission_plan, CustomStandardScaler
+from utils import get_mission_plan, LatLonStandardScaler
 from ament_index_python.packages import get_package_share_directory
 
 import gpflow
@@ -98,7 +98,7 @@ class offlineIPP(Node):
                  
         self.X_candidates = ploygon2candidats(self.fence_vertices, num_samples=5000)
         self.X_candidates = np.array(self.X_candidates).reshape(-1, 2)
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_candidates)
         self.X_candidates = self.X_scaler.transform(self.X_candidates)
 

@@ -66,7 +66,7 @@ def point_cloud(points, parent_frame):
         data=data
     )
 
-class CustomStandardScaler(StandardScaler):
+class LatLonStandardScaler(StandardScaler):
     def fit(self, X, y=None, sample_weight=None):
         # Map lat long to UTM points before normalization
         X = utm.from_latlon(X[:, 0], X[:, 1])

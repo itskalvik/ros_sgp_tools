@@ -8,7 +8,7 @@ import os
 import h5py
 import pickle
 import numpy as np
-from utils import CustomStandardScaler, point_cloud, StandardScaler
+from utils import LatLonStandardScaler, StandardScaler, point_cloud
 
 from sgptools.utils.gpflow import *
 from sgptools.utils.misc import ploygon2candidats
@@ -65,7 +65,7 @@ class DataVisualizer(Node):
         # Normalize the candidates
         X_candidates = ploygon2candidats(self.fence_vertices, 
                                          num_samples=self.num_samples)
-        self.X_scaler = CustomStandardScaler()
+        self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(X_candidates)
         self.X_scaler.scale_ *= 0.35
         X_candidates = self.X_scaler.transform(X_candidates)
