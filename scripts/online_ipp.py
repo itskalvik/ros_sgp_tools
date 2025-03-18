@@ -418,9 +418,8 @@ class OnlineIPP(Node):
                            method='CG')
         except Exception as e:
             # Failsafe for cholesky decomposition failure
-            self.get_logger().info(f"{traceback.format_exc()}")
-            self.get_logger().info(f"Failed to update parameter model")
-            self.get_logger().info(f"Resetting parameter model")
+            self.get_logger().error(f"{traceback.format_exc()}")
+            self.get_logger().warning(f"Failed to update parameter model! Resetting parameter model...")
             self.init_sgp_models(IPP_model=False)
 
         if self.kernel == 'RBF':

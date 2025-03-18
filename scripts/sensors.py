@@ -26,7 +26,7 @@ class GPS(SensorCallback):
     def process_msg(self, msg):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
 
-class SerialPing2(SensorCallback):
+class SerialPing1D(SensorCallback):
     def __init__(self):
         self.topic = "mavros/rangefinder_pub"
 
@@ -40,9 +40,9 @@ class SerialPing2(SensorCallback):
     def process_msg(self, msg, position):
         return [position[:2]], [msg.range]
     
-class GazeboPing2(SensorCallback):
+class GazeboPing1D(SensorCallback):
     def __init__(self):
-        self.topic = "ping2"
+        self.topic = "Ping1D"
 
     def get_subscriber(self, node_obj, callback_group=None):
         sub = Subscriber(node_obj, LaserScan, 
@@ -54,7 +54,7 @@ class GazeboPing2(SensorCallback):
     def process_msg(self, msg, position):
         return [position[:2]], [np.mean(msg.ranges)]
 
-class Ping2(SerialPing2):
+class Ping1D(SerialPing1D):
     def __init__(self):
         self.topic = "ping1d/range"
 

@@ -202,14 +202,14 @@
       </visual>
     </link>
 
-    <!-- Ping2 Sonar Altimeter and Echosounder emulated using a lidar sensor
+    <!-- Ping1D Sonar Altimeter and Echosounder emulated using a lidar sensor
     Beamwidth: 25 degrees, Typical Minimum Range: 0.3m, Typical usable Range: 100m,
     Range Resolution at 2m: 50cm -->
-    <link name="ping2_link">
+    <link name="ping_1d_link">
       <pose>0 0 -0.3 0 1.5708 0</pose>
-      <sensor name='ping2' type='gpu_lidar'>
-        <pose relative_to='ping2_link'>0 0 0 0 0 0</pose>
-        <topic>ping2</topic>
+      <sensor name='ping_1d' type='gpu_lidar'>
+        <pose relative_to='ping_1d_link'>0 0 0 0 0 0</pose>
+        <topic>ping_1d</topic>
         <update_rate>10</update_rate>
         <always_on>1</always_on>
         <visualize>1</visualize>
@@ -241,8 +241,8 @@
         </ray>
       </sensor>
     </link>
-    <joint name="ping2_joint" type="fixed">
-      <child>ping2_link</child>
+    <joint name="ping_1d_joint" type="fixed">
+      <child>ping_1d_link</child>
       <parent>base_link</parent>
       <axis>
         <xyz>0 0 1</xyz>

@@ -27,7 +27,7 @@ def generate_launch_description():
 
     # Get parameter values
     namespace = get_var('NAMESPACE', 'robot_0')
-    data_type = get_var('DATA_TYPE' ,'GazeboPing2')
+    data_type = get_var('DATA_TYPE' ,'GazeboPing1D')
     num_waypoints = int(get_var('NUM_WAYPOINTS', 20))
     sampling_rate = int(get_var('SAMPLING_RATE', 2))
     data_buffer_size = int(get_var('DATA_BUFFER_SIZE', 200))
@@ -36,7 +36,7 @@ def generate_launch_description():
     adaptive_ipp = True if get_var('ADAPTIVE_IPP', 'True')=='True' else False
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
-    ping2_port = get_var('PING2_PORT', '/dev/ttyUSB0')
+    ping_1d_port = get_var('PING_1D_PORT', '/dev/ttyUSB0')
     kernel = get_var('KERNEL', 'RBF')
 
     num_robots = 1
@@ -55,8 +55,8 @@ def generate_launch_description():
     print(f"ADAPTIVE_IPP: {adaptive_ipp}")
     print(f"KERNEL: {kernel}")
     print(f"FCU_URL: {fcu_url}")
-    if data_type=='Ping2':
-        print(f"PING2_PORT: {ping2_port}")
+    if data_type=='Ping1D':
+        print(f"PING_1D_PORT: {ping_1d_port}")
     print('')
 
     nodes = []
@@ -121,22 +121,22 @@ def generate_launch_description():
                 )
     nodes.append(mavros)
 
-    if data_type=='Ping2':
-        # Ping2 ROS package 
+    if data_type=='Ping1D':
+        # Ping1D ROS package 
         sensor = Node(package='ping_sonar_ros',
                       executable='ping1d_node',
-                      name='Ping2',
+                      name='Ping1D',
                       namespace=namespace,
                       parameters=[
-                        {'port': ping2_port}
+                        {'port': ping_1d_port}
                       ])
         nodes.append(sensor)   
-    elif data_type=='GazeboPing2':
+    elif data_type=='GazeboPing1D':
         # Gazebo ROS Bridge
         bridge = Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            arguments=[f'ping2@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan'],
+            arguments=[f'ping_1d@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan'],
             namespace=namespace
         )
         nodes.append(bridge)         
