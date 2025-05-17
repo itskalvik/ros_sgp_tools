@@ -60,7 +60,7 @@ def generate_launch_description():
     nodes = []
 
     # Offline IPP for initial path
-    offline_kernel = 'None' if kernel is 'None' else 'RBF'
+    offline_kernel = 'None' if kernel == 'None' else 'RBF'
     offline_planner = Node(package='ros_sgp_tools',
                            executable='offline_ipp.py',
                            name='OfflineIPP',
