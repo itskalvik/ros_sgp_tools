@@ -104,7 +104,7 @@ class DataVisualizer(Node):
                                                 return_gp=True,
                                                 train_inducing_pts=True,
                                                 max_steps=max_steps)
-
+        
         # Load pre-trained parameters
         if params is not None:
             gpflow.utilities.multiple_assign(self.gpr_gt.kernel, params['kernel'])
@@ -118,6 +118,12 @@ class DataVisualizer(Node):
                       'likelihood': params_likelihood}
             with open(fname, 'wb') as handle:
                 pickle.dump(params, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Print GP hyperparams if using RBF kernel
+        if self.kernel == 'RBF':
+            self.get_logger().info(f'kernel lengthscales: {self.gpr_gt.kernel.lengthscales.numpy():.4f}')
+            self.get_logger().info(f'kernel variance: {self.gpr_gt.kernel.variance.numpy():.4f}')
+            self.get_logger().info(f'Likelihood variance: {self.gpr_gt.likelihood.variance.numpy():.4f}')
 
         # Publish point cloud every 10 seconds
         self.create_timer(10, callback=self.timer_callback)
