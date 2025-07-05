@@ -14,11 +14,7 @@ find_package(std_msgs REQUIRED)
 find_package(rclpy REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/ETA.msg"
-  "msg/IPPData.msg"
-  "msg/WaypointsList.msg"
-  "srv/IPP.srv"
-  "srv/Waypoints.srv"
+  "srv/Waypoint.srv"
   DEPENDENCIES geometry_msgs
 )
 
@@ -38,8 +34,7 @@ endif()
 
 # Install Python executables
 install(PROGRAMS
-  scripts/offline_ipp.py
-  scripts/online_ipp.py
+  scripts/path_planner.py
   scripts/path_follower.py
   scripts/data_visualizer.py
   DESTINATION lib/${PROJECT_NAME}

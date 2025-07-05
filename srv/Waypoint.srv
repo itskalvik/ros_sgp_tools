@@ -1,0 +1,4 @@
+bool ok
+---
+geometry_msgs/Point waypoint
+bool new_waypoint

@@ -1,0 +1,31 @@
+tsp:
+  time_limit: 2
+
+transform:
+  sampling_rate: 2
+  distance_budget: 
+  aggregate_fov: False
+
+hyperparameters:
+  noise_variance: 1e-4
+  kernel_function: 'RBF'
+  kernel:
+    variance: 0.1
+    lengthscales: 1.0
+
+ipp_model:
+  method: ContinuousSGP
+  num_waypoints: 20
+  optimizer:
+    max_steps: 200
+
+param_model:
+  method: SSGP
+  num_inducing: 20
+  train_inducing: True
+  optimizer:
+    max_steps: 200
+
+robot:
+  sensor: 'GazeboPing1D'
+  data_buffer_size: 30
