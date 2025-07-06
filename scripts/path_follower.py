@@ -27,7 +27,7 @@ class WaypointServiceClient(Node):
             self.get_logger().info('Mission complete')
             return
 
-class IPPPathFollower(Controller):
+class PathFollower(Controller):
 
     def __init__(self):
         super().__init__(navigation_type=0,
@@ -68,7 +68,7 @@ class IPPPathFollower(Controller):
 
 def main(args=None):
     rclpy.init(args=args)
-    path_follower = IPPPathFollower()
+    path_follower = PathFollower()
     rclpy.spin_once(path_follower)
 
 if __name__ == '__main__':

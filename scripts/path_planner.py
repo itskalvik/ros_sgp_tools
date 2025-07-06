@@ -4,6 +4,7 @@ import os
 import time
 import h5py
 import yaml
+import shutil
 import importlib
 import traceback
 from threading import Lock
@@ -40,9 +41,9 @@ tf.random.set_seed(2024)
 np.random.seed(2024)
 
 
-class IPPPathPlanner(Node):
+class PathPlanner(Node):
     """
-    Online IPP mission planner
+    Informative path planner
     """
     def __init__(self):
         super().__init__('path_planner')
@@ -73,6 +74,8 @@ class IPPPathPlanner(Node):
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
+        shutil.copy(plan_fname, self.data_folder)
+        shutil.copy(config_fname, self.data_folder)
         data_fname = os.path.join(self.data_folder, f'mission-log.hdf5')
         self.data_file = h5py.File(data_fname, "a")
         self.dset_X = self.data_file.create_dataset("X", (0, 2), 
@@ -451,7 +454,7 @@ if __name__ == '__main__':
     # Start the online IPP mission
     rclpy.init()
 
-    online_ipp = IPPPathPlanner()
+    online_ipp = PathPlanner()
     executor = MultiThreadedExecutor()
     executor.add_node(online_ipp)
     executor.spin()

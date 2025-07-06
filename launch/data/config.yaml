@@ -1,5 +1,5 @@
 tsp:
-  time_limit: 2
+  time_limit: 20
 
 transform:
   sampling_rate: 2
@@ -10,7 +10,7 @@ hyperparameters:
   noise_variance: 1e-4
   kernel_function: 'RBF'
   kernel:
-    variance: 0.1
+    variance: 0.01
     lengthscales: 1.0
 
 ipp_model:

@@ -36,7 +36,6 @@ def generate_launch_description():
                                         'config.yaml'])
 
     nodes = []
-
     path_planner = Node(package='ros_sgp_tools',
                         executable='path_planner.py',
                         parameters=[
