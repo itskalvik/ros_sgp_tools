@@ -1,11 +1,6 @@
 tsp:
   time_limit: 20
 
-transform:
-  sampling_rate: 2
-  distance_budget: 
-  aggregate_fov: False
-
 hyperparameters:
   noise_variance: 1e-4
   kernel_function: RBF
@@ -14,19 +9,23 @@ hyperparameters:
     lengthscales: 1.0
 
 ipp_model:
+  num_waypoints: 10
   method: ContinuousSGP
-  num_waypoints: 20
   optimizer:
     max_steps: 200
+  transform:
+    sampling_rate: 2
+    distance_budget: 
+    aggregate_fov: False
 
 param_model:
-  method: SSGP # Options: SSGP, GP
-  num_inducing: 20
+  method: SSGP # Available Options: SSGP
+  num_inducing: 40
   train_inducing: True
   optimizer:
     max_steps: 200
 
 robot:
   sensor: GazeboPing1D
-  data_buffer_size: 30
-  mission_type: AdaptiveIPP # Options: AdaptiveIPP, IPP, WaypointMission
+  data_buffer_size: 200
+  mission_type: AdaptiveIPP # Available Options: AdaptiveIPP, IPP, Waypoint
