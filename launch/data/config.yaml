@@ -8,7 +8,7 @@ transform:
 
 hyperparameters:
   noise_variance: 1e-4
-  kernel_function: 'RBF'
+  kernel_function: RBF
   kernel:
     variance: 0.01
     lengthscales: 1.0
@@ -20,12 +20,13 @@ ipp_model:
     max_steps: 200
 
 param_model:
-  method: SSGP
+  method: SSGP # Options: SSGP, GP
   num_inducing: 20
   train_inducing: True
   optimizer:
     max_steps: 200
 
 robot:
-  sensor: 'GazeboPing1D'
+  sensor: GazeboPing1D
   data_buffer_size: 30
+  mission_type: AdaptiveIPP # Options: AdaptiveIPP, IPP, WaypointMission

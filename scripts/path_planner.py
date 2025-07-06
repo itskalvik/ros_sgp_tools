@@ -88,7 +88,8 @@ class PathPlanner(Node):
                                                     chunks=True)
 
         # Get the mission plan (fence and start location) and normalize
-        if self.config.get('ipp_model').get('method') == 'WaypointMission':
+        self.mission_type = self.config.get('robot').get('mission_type')
+        if self.mission_type == 'WaypointMission':
             self.fence_vertices, self.start_location, waypoints = get_mission_plan(plan_fname, 
                                                                                    get_waypoints=True)
         else:
@@ -102,12 +103,16 @@ class PathPlanner(Node):
         self.X_objective = self.X_scaler.transform(self.X_objective)
         self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]))
 
-        if self.config.get('ipp_model').get('method') == 'WaypointMission':
+        if self.mission_type == 'WaypointMission':
             self.waypoints = waypoints[:, :2]
             self.waypoints = self.X_scaler.transform(self.waypoints)
-        else:
+        elif self.mission_type == 'IPP':
+            self.init_models(init_param_model=False)
+        elif self.mission_type == 'AdaptiveIPP':
             self.init_models()
-
+        else:
+            raise ValueError(f'Invalid mission type: {self.mission_type}')
+        
         # Save fence_vertices and initial path to the data store
         self.data_file.create_dataset("fence_vertices", 
                                       self.fence_vertices.shape, 
@@ -131,6 +136,7 @@ class PathPlanner(Node):
         self.heading_velocity = 1.0
         self.data_buffer_size = self.config.get('robot').get('data_buffer_size')
         self.stats = RunningStats()
+
         # Setup data subscribers
         sensors_module = importlib.import_module('sensors')
         self.sensors = []
@@ -173,8 +179,7 @@ class PathPlanner(Node):
     Callback to get the current waypoint and shutdown the node once the mission ends
     '''
     def eta_callback(self, msg):
-        self.heading_velocity = np.min([self.heading_velocity, 
-                                        msg.data[2]])
+        self.heading_velocity = msg.data[2]
         self.distances[self.current_waypoint] = msg.data[1]
 
     def waypoint_service_callback(self, request, response):
@@ -183,6 +188,7 @@ class PathPlanner(Node):
             rclpy.shutdown()
         else:
             self.current_waypoint += 1
+            self.get_logger().info(f'Current waypoint: {self.current_waypoint}')
 
         if self.current_waypoint >= len(self.waypoints):
             response.new_waypoint = False
@@ -198,14 +204,14 @@ class PathPlanner(Node):
         self.waypoints_lock.release()
         return response
 
-    def init_models(self, ipp_model=True):
+    def init_models(self, init_ipp_model=True, init_param_model=True):
         hyperparameter_config = self.config['hyperparameters']
         self.kernel = hyperparameter_config['kernel_function']
         kernel_kwargs = hyperparameter_config['kernel']
         kernel = get_kernel(self.kernel)(**kernel_kwargs)
         noise_variance = float(hyperparameter_config['noise_variance'])
 
-        if ipp_model:
+        if init_ipp_model:
             self.ipp_model_config = self.config['ipp_model']
             self.num_waypoints = self.ipp_model_config['num_waypoints']
             
@@ -238,17 +244,18 @@ class PathPlanner(Node):
             self.distances = haversine(lat_lon_waypoints[1:], 
                                        lat_lon_waypoints[:-1])
             
-        # Initialize the param model
-        self.param_model_config = self.config['param_model']
-        self.param_model_kwargs = self.param_model_config.get('optimizer')
-        self.param_model_method = self.param_model_config['method']
-        if self.param_model_method == 'SSGP':
-            self.train_param_inducing = self.param_model_config.get('train_inducing')
-            self.num_param_inducing = self.param_model_config['num_inducing']
-            self.param_model = init_osgpr(self.X_objective, 
-                                          num_inducing=self.num_param_inducing, 
-                                          kernel=kernel,
-                                          noise_variance=noise_variance)
+        if init_param_model:
+            # Initialize the param model
+            self.param_model_config = self.config['param_model']
+            self.param_model_kwargs = self.param_model_config.get('optimizer')
+            self.param_model_method = self.param_model_config['method']
+            if self.param_model_method == 'SSGP':
+                self.train_param_inducing = self.param_model_config.get('train_inducing')
+                self.num_param_inducing = self.param_model_config['num_inducing']
+                self.param_model = init_osgpr(self.X_objective, 
+                                            num_inducing=self.num_param_inducing, 
+                                            kernel=kernel,
+                                            noise_variance=noise_variance)
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
@@ -261,6 +268,8 @@ class PathPlanner(Node):
                 # position data is used by only a few sensors
                 data_X, data_y = self.sensors[1].process_msg(args[1], 
                                                              position=position)
+            # Update running stats
+            self.stats.push(data_y, per_dim=True)
 
             self.data_lock.acquire()
             self.data_X.extend(data_X)
@@ -282,7 +291,7 @@ class PathPlanner(Node):
             self.data_lock.release()
 
             # Update the parameters
-            if self.kernel is not None:
+            if self.mission_type == 'AdaptiveIPP':
                 start_time = self.get_clock().now().to_msg().sec
                 self.update_param(data_X, data_y)
                 end_time = self.get_clock().now().to_msg().sec
@@ -308,6 +317,8 @@ class PathPlanner(Node):
                 self.waypoints_lock.acquire()
                 if self.current_waypoint < update_waypoint:
                     self.waypoints = new_waypoints
+                else:
+                    self.get_logger().info("Waypoint update rejected")
                 self.waypoints_lock.release()
                 
             # Dump data to data store
@@ -371,6 +382,9 @@ class PathPlanner(Node):
 
         # Normalize the data, use running mean and std for sensor data
         X_new = self.X_scaler.transform(X_new)
+        y_new = (y_new - self.stats.mean) / self.stats.std
+        self.get_logger().info(f'Data Mean: {self.stats.mean:.4f}')
+        self.get_logger().info(f'Data Std: {self.stats.std:.4f}')
 
         # Don't update the parameters if the current target is the last waypoint
         if self.current_waypoint >= self.num_waypoints-1:
@@ -401,7 +415,7 @@ class PathPlanner(Node):
             # Failsafe for cholesky decomposition failure
             self.get_logger().error(f"{traceback.format_exc()}")
             self.get_logger().warning(f"Failed to update parameter model! Resetting parameter model...")
-            self.init_models(ipp_model=False)
+            self.init_models(init_ipp_model=False)
 
         if self.kernel == 'RBF':
             self.get_logger().info(f'SSGP kernel lengthscales: {self.param_model.kernel.lengthscales.numpy():.4f}')
