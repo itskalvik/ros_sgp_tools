@@ -132,7 +132,6 @@ class PathPlanner(Node):
         self.data_lock = Lock()
         self.waypoints_lock = Lock()
         self.runtime_est = None
-        self.mission_complete = False
         self.heading_velocity = 1.0
         self.data_buffer_size = self.config.get('robot').get('data_buffer_size')
         self.stats = RunningStats()
@@ -180,7 +179,8 @@ class PathPlanner(Node):
     '''
     def eta_callback(self, msg):
         self.heading_velocity = msg.data[2]
-        self.distances[self.current_waypoint] = msg.data[1]
+        if self.current_waypoint < len(self.waypoints)-1:
+            self.distances[self.current_waypoint] = msg.data[1]
 
     def waypoint_service_callback(self, request, response):
         if not request.ok:
@@ -188,12 +188,12 @@ class PathPlanner(Node):
             rclpy.shutdown()
         else:
             self.current_waypoint += 1
-            self.get_logger().info(f'Current waypoint: {self.current_waypoint}')
 
         if self.current_waypoint >= len(self.waypoints):
             response.new_waypoint = False
-            self.mission_complete = True
             return response
+        else:
+            self.get_logger().info(f'Current waypoint: {self.current_waypoint}')
 
         self.waypoints_lock.acquire()
         response.new_waypoint = True
@@ -259,7 +259,7 @@ class PathPlanner(Node):
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
-        if self.current_waypoint > 0 and not self.mission_complete:
+        if self.current_waypoint > 0 and self.current_waypoint < len(self.waypoints):
             position = self.sensors[0].process_msg(args[0])
             if len(args) == 1:
                 data_X = [position[:2]]
@@ -280,7 +280,8 @@ class PathPlanner(Node):
         # Update the hyperparameters and waypoints if the buffer is full 
         # or if force_update is True and atleast num_param_inducing data points are available
         if len(self.data_X) > self.data_buffer_size or \
-            (force_update and len(self.data_X) > self.num_param_inducing):
+            (force_update and len(self.data_X) > self.num_param_inducing) or \
+            self.current_waypoint >= len(self.waypoints):
 
             # Make local copies of the data and clear the data buffers         
             self.data_lock.acquire()
@@ -291,14 +292,13 @@ class PathPlanner(Node):
             self.data_lock.release()
 
             # Update the parameters
-            if self.mission_type == 'AdaptiveIPP':
+            if self.mission_type == 'AdaptiveIPP' and self.current_waypoint < len(self.waypoints):
                 start_time = self.get_clock().now().to_msg().sec
                 self.update_param(data_X, data_y)
                 end_time = self.get_clock().now().to_msg().sec
-                self.get_logger().info(f'Param update time: {end_time-start_time} secs')
-                # Store the initial (worstcase) IPP runtime estimate
-                if self.runtime_est is None: 
-                    self.runtime_est = end_time-start_time
+                runtime = end_time-start_time
+                self.get_logger().info(f'Param update time: {runtime} secs')
+                self.runtime_est = runtime
 
                 # Update the waypoints
                 start_time = self.get_clock().now().to_msg().sec
@@ -306,9 +306,7 @@ class PathPlanner(Node):
                 end_time = self.get_clock().now().to_msg().sec
                 runtime = end_time-start_time
                 self.get_logger().info(f'IPP update time: {runtime} secs')
-                # Store the IPP runtime upper bound
-                if self.runtime_est < runtime:
-                    self.runtime_est = runtime
+                self.runtime_est += runtime
             else:
                 update_waypoint = -1
 
@@ -345,9 +343,9 @@ class PathPlanner(Node):
                             update_waypoint=update_waypoint)
 
             # Shutdown the online planner if the mission is complete
-            if self.mission_complete:
+            if self.current_waypoint >= len(self.waypoints):
                 # Rerun method to get last batch of data
-                if not force_update:
+                if not force_update and len(self.data_X) > 0:
                     self.update_with_data(force_update=True)
                 self.get_logger().info('Finished mission, shutting down online planner')
                 rclpy.shutdown()
@@ -383,8 +381,8 @@ class PathPlanner(Node):
         # Normalize the data, use running mean and std for sensor data
         X_new = self.X_scaler.transform(X_new)
         y_new = (y_new - self.stats.mean) / self.stats.std
-        self.get_logger().info(f'Data Mean: {self.stats.mean:.4f}')
-        self.get_logger().info(f'Data Std: {self.stats.std:.4f}')
+        self.get_logger().info(f'Data Mean: {self.stats.mean}')
+        self.get_logger().info(f'Data Std: {self.stats.std}')
 
         # Don't update the parameters if the current target is the last waypoint
         if self.current_waypoint >= self.num_waypoints-1:
