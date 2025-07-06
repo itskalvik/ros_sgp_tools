@@ -89,7 +89,7 @@ class PathPlanner(Node):
 
         # Get the mission plan (fence and start location) and normalize
         self.mission_type = self.config.get('robot').get('mission_type')
-        if self.mission_type == 'WaypointMission':
+        if self.mission_type == 'Waypoint':
             self.fence_vertices, self.start_location, waypoints = get_mission_plan(plan_fname, 
                                                                                    get_waypoints=True)
         else:
@@ -103,7 +103,7 @@ class PathPlanner(Node):
         self.X_objective = self.X_scaler.transform(self.X_objective)
         self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]))
 
-        if self.mission_type == 'WaypointMission':
+        if self.mission_type == 'Waypoint':
             self.waypoints = waypoints[:, :2]
             self.waypoints = self.X_scaler.transform(self.waypoints)
         elif self.mission_type == 'IPP':
@@ -113,6 +113,11 @@ class PathPlanner(Node):
         else:
             raise ValueError(f'Invalid mission type: {self.mission_type}')
         
+        # Compute distances between waypoints for estimating waypoint arrival time
+        lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
+        self.distances = haversine(lat_lon_waypoints[1:], 
+                                    lat_lon_waypoints[:-1])
+
         # Save fence_vertices and initial path to the data store
         self.data_file.create_dataset("fence_vertices", 
                                       self.fence_vertices.shape, 
@@ -224,8 +229,9 @@ class PathPlanner(Node):
                                  **self.config.get('tsp'))
             Xu_init = np.array(Xu_init)
 
+            transform_kwargs = self.ipp_model_config.get('transform')
             transform = IPPTransform(Xu_fixed=Xu_init[:, :1, :],
-                                     **self.config.get('transform'))
+                                     **transform_kwargs)
 
             ipp_model = get_method(self.ipp_model_config['method'])
             self.ipp_model = ipp_model(self.num_waypoints, 
@@ -240,9 +246,6 @@ class PathPlanner(Node):
             self.ipp_model_kwargs = self.ipp_model_config.get('optimizer')
             self.waypoints = self.ipp_model.optimize(**self.ipp_model_kwargs)[0]
             self.waypoints = project_waypoints(self.waypoints, self.X_objective)
-            lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
-            self.distances = haversine(lat_lon_waypoints[1:], 
-                                       lat_lon_waypoints[:-1])
             
         if init_param_model:
             # Initialize the param model
@@ -315,8 +318,6 @@ class PathPlanner(Node):
                 self.waypoints_lock.acquire()
                 if self.current_waypoint < update_waypoint:
                     self.waypoints = new_waypoints
-                else:
-                    self.get_logger().info("Waypoint update rejected")
                 self.waypoints_lock.release()
                 
             # Dump data to data store

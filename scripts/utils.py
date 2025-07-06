@@ -165,7 +165,7 @@ class RunningStats:
 
     @property
     def std(self):
-        return np.sqrt(self.variance())
+        return np.max([np.sqrt(self.variance()), np.ones_like(self.s)])
         
     def __repr__(self):
         return '<RunningMean(mean={: 2.4f}, std={: 2.4f}, n={: 2f}, m={: 2.4f}, s={: 2.4f})>'.format(self.mean, self.std, self.n, self.m, self.s)
