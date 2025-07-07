@@ -17,7 +17,10 @@ ipp_model:
     max_steps: 200
   transform:
     sampling_rate: 2
-    distance_budget: 
+    # Budget in meters
+    distance_budget:
+    # constraint_weight is ignored for empty distance budgets
+    constraint_weight: 5000.0 
     aggregate_fov: False
 
 # Configuration for the parameter model

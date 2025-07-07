@@ -230,6 +230,11 @@ class PathPlanner(Node):
             Xu_init = np.array(Xu_init)
 
             transform_kwargs = self.ipp_model_config.get('transform')
+            self.distance_budget = None
+            # Map distance budget in meters to normalized units
+            if transform_kwargs.get('distance_budget') is not None:
+                self.distance_budget = transform_kwargs['distance_budget']
+                transform_kwargs['distance_budget'] = self.X_scaler.meters2units(self.distance_budget)
             transform = IPPTransform(Xu_fixed=Xu_init[:, :1, :],
                                      **transform_kwargs)
 
@@ -246,7 +251,15 @@ class PathPlanner(Node):
             self.ipp_model_kwargs = self.ipp_model_config.get('optimizer')
             self.waypoints = self.ipp_model.optimize(**self.ipp_model_kwargs)[0]
             self.waypoints = project_waypoints(self.waypoints, self.X_objective)
-            
+
+            if self.distance_budget is not None:
+                distance = self.ipp_model.transform.distance(self.waypoints.reshape(-1, 2)).numpy()
+                distance = self.X_scaler.units2meters(distance)
+                if distance > self.distance_budget:
+                    self.get_logger().warn("Distance budget constraint violated! Consider increasing the transform's constraint_weight!")
+                self.get_logger().info(f"Distance Budget: {self.distance_budget:.2f} m")
+                self.get_logger().info(f"Path Length: {distance[0]:.2f} m")
+
         if init_param_model:
             # Initialize the param model
             self.param_model_config = self.config['param_model']
@@ -256,9 +269,9 @@ class PathPlanner(Node):
                 self.train_param_inducing = self.param_model_config.get('train_inducing')
                 self.num_param_inducing = self.param_model_config['num_inducing']
                 self.param_model = init_osgpr(self.X_objective, 
-                                            num_inducing=self.num_param_inducing, 
-                                            kernel=kernel,
-                                            noise_variance=noise_variance)
+                                              num_inducing=self.num_param_inducing, 
+                                              kernel=kernel,
+                                              noise_variance=noise_variance)
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)
@@ -372,6 +385,14 @@ class PathPlanner(Node):
         # Might move waypoints before the current waypoint (reset to avoid update rejection)
         waypoints = project_waypoints(waypoints, self.X_objective)
         waypoints[:update_waypoint+1] = self.waypoints[:update_waypoint+1]
+
+        if self.distance_budget is not None:
+            distance = self.ipp_model.transform.distance(waypoints.reshape(-1, 2)).numpy()
+            distance = self.X_scaler.units2meters(distance)
+            if distance > self.distance_budget:
+                self.get_logger().warn("Distance budget constraint violated! Consider increasing the transform's constraint_weight!")
+            self.get_logger().info(f"Distance Budget: {self.distance_budget:.2f} m")
+            self.get_logger().info(f"Path Length: {distance[0]:.2f} m")
 
         return waypoints, update_waypoint
 

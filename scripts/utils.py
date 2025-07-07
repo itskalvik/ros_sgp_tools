@@ -80,6 +80,12 @@ class LatLonStandardScaler(StandardScaler):
         ind = np.argmax(self.var_)
         self.var_ = np.ones(X.shape[-1])*self.var_[ind]
         self.scale_ = np.ones(X.shape[-1])*self.scale_[ind]
+        self.scale_ /= 10.0  # Scale to ensure an extent of ~10 units
+
+        # Compute distance scale
+        X1 = super().transform([np.copy(X[0])])
+        X2 = super().transform([np.copy(X[0]) + [1.0, 0.0]])
+        self.distance_scale = np.linalg.norm(X1-X2, axis=-1)
 
     def transform(self, X, copy=None):
         # Map lat long to UTM points before normalization
@@ -99,6 +105,14 @@ class LatLonStandardScaler(StandardScaler):
                           self.encoding[0], self.encoding[1])
         X = np.vstack([X[0], X[1]]).T
         return X
+
+    def meters2units(self, distance):
+        # Map distance in meters to distance in normalized units
+        return self.distance_scale*distance
+    
+    def units2meters(self, distance):
+        # Map distance in normalized units to distance in meters
+        return distance/self.distance_scale
 
 class RunningStats:
     """Computes running mean and standard deviation
