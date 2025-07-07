@@ -1,5 +1,6 @@
 import os
 import sys
+import yaml
 import psutil
 
 from launch_ros.actions import Node
@@ -8,6 +9,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import GroupAction, IncludeLaunchDescription
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
 
 
 def get_var(var, default):
@@ -23,17 +25,17 @@ def generate_launch_description():
         sys.exit("Low memory (less than 4GB), increase swap size!")
 
     # Get parameter values
-    data_type = get_var('DATA_TYPE' ,'GazeboPing1D')
+    geofence_plan = os.path.join(get_package_share_directory('ros_sgp_tools'), 
+                                                             'launch', 'data',
+                                                             'mission.plan')
+    config_file = os.path.join(get_package_share_directory('ros_sgp_tools'), 
+                                                           'launch', 'data',
+                                                           'config.yaml')
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
+    sensor = config['robot']['sensor']
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
-    ping1d_port = get_var('PING1D_PORT', '/dev/ttyUSB0')
-
-    geofence_plan = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                          'launch', 'data',
-                                          'mission.plan'])
-    config_file = PathJoinSubstitution([FindPackageShare('ros_sgp_tools'),
-                                        'launch', 'data',
-                                        'config.yaml'])
 
     nodes = []
     path_planner = Node(package='ros_sgp_tools',
@@ -71,8 +73,9 @@ def generate_launch_description():
                 )
     nodes.append(mavros)
 
-    if data_type=='Ping1D':
+    if sensor=='Ping1D':
         # Ping1D ROS package 
+        ping1d_port = config['sensor'][sensor]['port']
         sensor = Node(package='ping_sonar_ros',
                       executable='ping1d_node',
                       name='Ping1D',
@@ -80,7 +83,7 @@ def generate_launch_description():
                         {'port': ping1d_port}
                       ])
         nodes.append(sensor)   
-    elif data_type=='GazeboPing1D':
+    elif sensor=='GazeboPing1D':
         # Gazebo ROS Bridge
         bridge = Node(
             package='ros_gz_bridge',

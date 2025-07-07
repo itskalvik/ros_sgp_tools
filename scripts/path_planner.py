@@ -50,14 +50,14 @@ class PathPlanner(Node):
         self.get_logger().info('Initializing')
 
         plan_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
-                                                              'launch', 
+                                                              'launch', 'data',
                                                               'mission.plan')
         self.declare_parameter('geofence_plan', plan_fname)
         plan_fname = self.get_parameter('geofence_plan').get_parameter_value().string_value
         self.get_logger().info(f'GeoFence Plan File: {plan_fname}')
 
         config_fname = os.path.join(get_package_share_directory('ros_sgp_tools'), 
-                                                                'launch', 
+                                                                'launch', 'data',
                                                                 'config.yaml')
         self.declare_parameter('config_file', config_fname)
         config_fname = self.get_parameter('config_file').get_parameter_value().string_value
