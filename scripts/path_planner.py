@@ -222,12 +222,12 @@ class PathPlanner(Node):
             
             # Sample uniform random initial waypoints and compute initial paths
             # Sample one less waypoint per robot and add the home position as the first waypoint
-            Xu_init = get_inducing_pts(self.X_objective, (self.num_waypoints-1))
+            X_init = get_inducing_pts(self.X_objective, (self.num_waypoints-1))
             self.get_logger().info(f"Running TSP solver to get the initial path...")
-            Xu_init, _ = run_tsp(Xu_init,
+            X_init, _ = run_tsp(X_init,
                                  start_nodes=self.start_location,
                                  **self.config.get('tsp'))
-            Xu_init = np.array(Xu_init)
+            X_init = np.array(X_init)
 
             transform_kwargs = self.ipp_model_config.get('transform')
             self.distance_budget = None
@@ -235,7 +235,7 @@ class PathPlanner(Node):
             if transform_kwargs.get('distance_budget') is not None:
                 self.distance_budget = transform_kwargs['distance_budget']
                 transform_kwargs['distance_budget'] = self.X_scaler.meters2units(self.distance_budget)
-            transform = IPPTransform(Xu_fixed=Xu_init[:, :1, :],
+            transform = IPPTransform(Xu_fixed=X_init[:, :1, :],
                                      **transform_kwargs)
 
             ipp_model = get_method(self.ipp_model_config['method'])
@@ -244,7 +244,7 @@ class PathPlanner(Node):
                                        kernel=kernel,
                                        noise_variance=noise_variance,
                                        transform=transform,
-                                       Xu_init=Xu_init[0])
+                                       X_init=X_init[0])
 
             # Project the waypoints to be within the bounds of the environment
             self.get_logger().info(f"Running IPP solver to update the initial path...")
