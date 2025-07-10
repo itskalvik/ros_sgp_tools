@@ -6,14 +6,15 @@ import rclpy
 
 import os
 import h5py
+import yaml
 import pickle
 import numpy as np
 from utils import LatLonStandardScaler, StandardScaler, point_cloud
 
+from sgptools.utils.misc import polygon2candidates
+from sgptools.kernels import get_kernel
+from sgptools.utils.metrics import *
 from sgptools.utils.gpflow import *
-from sgptools.utils.misc import ploygon2candidats
-from sgptools.kernels.attentive_kernel import AttentiveKernel
-from sgptools.kernels.neural_kernel import NeuralSpectralKernel
 
 tf.random.set_seed(2024)
 np.random.seed(2024)
@@ -37,20 +38,37 @@ class DataVisualizer(Node):
         self.declare_parameter('mission_log', '')
         mission_log = self.get_parameter('mission_log').get_parameter_value().string_value
 
-        self.declare_parameter('kernel', 'RBF')
-        self.kernel = self.get_parameter('kernel').get_parameter_value().string_value
-        
         # Get the latest log folder
         if mission_log == '':
             logs = os.listdir(data_folder)
             mission_log = sorted([log for log in logs if 'IPP-mission' in log])[-1]
 
-        # data file
+        # Extract hyperparameters from viz_config.yaml if available
+        config_fname = os.path.join(data_folder, mission_log, f"viz_config.yaml")
+        if os.path.exists(config_fname):
+            self.get_logger().info(f'Config File: {config_fname}')
+            with open(config_fname, 'r') as file:
+                self.config = yaml.safe_load(file)
+            hyperparameter_config = self.config['hyperparameters']
+            self.kernel = hyperparameter_config['kernel_function']
+            kernel_kwargs = hyperparameter_config.get('kernel')
+            if kernel_kwargs is None:
+                kernel_kwargs = {}
+            kernel = get_kernel(self.kernel)(**kernel_kwargs)
+            noise_variance = float(hyperparameter_config['noise_variance'])
+            optimizer_kwargs = self.config.get('optimizer')
+        else:
+            self.kernel = 'RBF'
+            kernel =  get_kernel(self.kernel)()
+            noise_variance = 0.1
+            self.optimizer_kwargs = {}
+
+        # Load the data file
         self.fname = os.path.join(data_folder, 
                                   mission_log,
                                   "mission-log.hdf5")
-
-        # load data
+        if not os.path.exists(self.fname):
+            raise ValueError(f'Data file not found: {self.fname}')
         with h5py.File(self.fname, "r") as f:
             self.fence_vertices = f["fence_vertices"][:].astype(float)
             self.X = f["X"][:].astype(float)
@@ -63,47 +81,36 @@ class DataVisualizer(Node):
         self.get_logger().info(f'Kernel: {self.kernel}')
 
         # Normalize the candidates
-        X_candidates = ploygon2candidats(self.fence_vertices, 
-                                         num_samples=self.num_samples)
+        X_candidates = polygon2candidates(self.fence_vertices, 
+                                          num_samples=self.num_samples)
         self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(X_candidates)
         self.X_scaler.scale_ *= 0.35
         X_candidates = self.X_scaler.transform(X_candidates)
         self.X = self.X_scaler.transform(self.X)
         self.num_samples = 0 # reset to force update
-
         self.y_scaler = StandardScaler()
         self.y = self.y_scaler.fit_transform(self.y)
 
-        # Train SGP
-        if self.kernel == 'RBF':
-            kernel = gpflow.kernels.RBF(lengthscales=0.1, 
-                                        variance=0.5)
-        elif self.kernel == 'Attentive':
-            kernel = AttentiveKernel(np.linspace(0.1, 2.5, 10), 
-                                     dim_hidden=10)
-        elif self.kernel == 'Neural':
-            kernel = NeuralSpectralKernel(input_dim=2, 
-                                          Q=5, 
-                                          hidden_sizes=[4, 4])
-            
         # Train GP only if pretrained weights are unavailable
         fname = os.path.join(data_folder, mission_log, f"{self.kernel}Params.pkl")
         if os.path.exists(fname):
             with open(fname, 'rb') as handle:
                 params = pickle.load(handle)
-            max_steps = 0
+            optimizer_kwargs['max_steps'] = 0
             self.get_logger().info('Found pre-trained parameters')
         else:
-            max_steps = 1500
+            if optimizer_kwargs.get('max_steps') is None:
+                optimizer_kwargs['max_steps'] = 1500
             params = None
             self.get_logger().info('Training from scratch')
-
         _, _, _, self.gpr_gt = get_model_params(self.X, self.y,
                                                 kernel=kernel,
-                                                return_gp=True,
+                                                noise_variance=noise_variance,
+                                                return_model=True,
                                                 train_inducing_pts=True,
-                                                max_steps=max_steps)
+                                                verbose=True,
+                                                **optimizer_kwargs)
         
         # Load pre-trained parameters
         if params is not None:
@@ -135,8 +142,8 @@ class DataVisualizer(Node):
         if self.num_samples != num_samples:
             self.get_logger().info(f'Updated Number of samples: {num_samples}')
             self.num_samples = num_samples
-            X_candidates = ploygon2candidats(self.fence_vertices, 
-                                             num_samples=self.num_samples)
+            X_candidates = polygon2candidates(self.fence_vertices, 
+                                              num_samples=self.num_samples)
             X_candidates = self.X_scaler.transform(X_candidates)
             self.candidates_y = self.gpr_gt.predict_f(X_candidates)[0].numpy()
             self.point_cloud_msg = point_cloud(np.concatenate([X_candidates,
