@@ -1,4 +1,4 @@
-sgptools >= 2.0.1
+sgptools >= 2.0.2
 geopandas
 pygeodesy
 shapely
