@@ -96,7 +96,11 @@ class PathPlanner(Node):
             self.fence_vertices, self.start_location = get_mission_plan(plan_fname,
                                                                         get_waypoints=False)
             
-        self.X_objective = polygon2candidates(self.fence_vertices, num_samples=5000)
+        num_samples = self.config.get('ipp_model').get('num_samples')
+        if num_samples is None:
+            num_samples = 1000
+        self.X_objective = polygon2candidates(self.fence_vertices, 
+                                              num_samples=num_samples)
         self.X_objective = np.array(self.X_objective).reshape(-1, 2)
         self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_objective)
@@ -259,6 +263,7 @@ class PathPlanner(Node):
                     self.get_logger().warn("Distance budget constraint violated! Consider increasing the transform's constraint_weight!")
                 self.get_logger().info(f"Distance Budget: {self.distance_budget:.2f} m")
                 self.get_logger().info(f"Path Length: {distance[0]:.2f} m")
+            self.get_logger().info(f'Initialized {self.ipp_model_config["method"]} IPP model')
 
         if init_param_model:
             # Initialize the param model
@@ -272,6 +277,7 @@ class PathPlanner(Node):
                                               num_inducing=self.num_param_inducing, 
                                               kernel=kernel,
                                               noise_variance=noise_variance)
+            self.get_logger().info(f'Initialized {self.param_model_method} Parameter model')
 
     def data_callback(self, *args):
         # Use data only when the vechicle is moving (avoids failed cholskey decomposition in OSGPR)

@@ -40,6 +40,7 @@ def generate_launch_description():
     nodes = []
     path_planner = Node(package='ros_sgp_tools',
                         executable='path_planner.py',
+                        output='screen',
                         parameters=[
                             {'geofence_plan': geofence_plan,
                              'config_file': config_file,
