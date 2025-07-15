@@ -3,6 +3,7 @@ robot:
   sensor: Ping1D
   data_buffer_size: 200
   mission_type: AdaptiveIPP # Available Options: AdaptiveIPP, IPP, Waypoint
+  seed: 1234
 
 # Configuration for sensor(s)
 sensor:
