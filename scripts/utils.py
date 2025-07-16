@@ -2,6 +2,10 @@ import utm
 import json
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+from shapely.geometry import LineString
+import shapely.geometry
+import heapq
+import networkx as nx
 
 try:
     from std_msgs.msg import Header
@@ -206,3 +210,219 @@ def haversine(pt1, pt2):
     c = 2 * np.arcsin(np.sqrt(a))
     m = 6378.137 * c * 1000
     return m
+
+
+# Calculate the intersections between the line (point a -> point a) and the polygon, then order them by distance to point a
+def ordered_intersections_by_distance(point_a, point_b, polygon):
+    line = LineString([point_a, point_b])
+    intersection = polygon.intersection(line)
+
+    if isinstance(intersection, LineString):
+        intersection_points = list(intersection.coords)
+    elif hasattr(intersection, 'geoms'):
+        intersection_points = [pt for geom in intersection.geoms for pt in geom.coords]
+    else:
+        intersection_points = []
+
+    return sorted(intersection_points, key=lambda p: shapely.geometry.Point(p).distance(shapely.geometry.Point(point_a)))
+
+
+# Get 2 points inside the polygon that are near where the line (point a -> point b) intersects the polygon
+def get_padded_intersects(point_a, point_b, fence_polygon, padding_length=0.0001):
+    line = LineString([point_a, point_b])
+    intersection_coords = ordered_intersections_by_distance(point_a, point_b, fence_polygon)
+    intersection_coords = [intersection_coords[1], intersection_coords[-2]]
+
+    padded_points = []
+    for i in range(len(intersection_coords)):
+        intersection_point = shapely.geometry.Point(intersection_coords[i])
+        dist_to_a = line.project(intersection_point)
+        if dist_to_a<padding_length or dist_to_a + padding_length > line.length:
+            continue
+        if dist_to_a<padding_length:
+            padded_point = shapely.geometry.Point(point_a)
+        elif dist_to_a + padding_length > line.length:
+            padded_point = shapely.geometry.Point(point_b)
+        elif i==0:
+            padded_point = line.interpolate(dist_to_a - padding_length)
+        else:
+            padded_point = line.interpolate(dist_to_a + padding_length)
+        
+        padded_points.append((padded_point.x, padded_point.y))
+
+    return padded_points
+
+def lazy_astar(nodes, start_idx, goal_idx, polygon):
+    open_set = []
+    heapq.heappush(open_set, (0, start_idx))
+    
+    came_from = {}
+    g_score = {start_idx: 0}
+    
+    while open_set:
+        _, current = heapq.heappop(open_set)
+        
+        if current == goal_idx:
+            # Reconstruct path
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            return path[::-1]
+        
+        for neighbor in range(len(nodes)):
+            if neighbor == current:
+                continue
+            edge = LineString([nodes[current], nodes[neighbor]])
+            midpoint = edge.interpolate(0.5, normalized=True)
+            if not (polygon.contains(edge) or (polygon.touches(edge) and (polygon.contains(midpoint) or polygon.touches(midpoint)))):
+                continue
+
+            
+            tentative_g = g_score[current] + np.linalg.norm(np.array(nodes[current]) - np.array(nodes[neighbor]))
+            if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g
+                f_score = tentative_g + np.linalg.norm(np.array(nodes[neighbor]) - np.array(nodes[goal_idx]))
+                heapq.heappush(open_set, (f_score, neighbor))
+    
+    return None  
+
+# Calculate a list of points to travel from point a to point b while staying inside the polygon
+def calculate_bounded_path(point_a, point_b, fence_polygon, continuous=True):
+    
+
+    # First calculate padded points close to the intersection
+    if continuous:
+        end_points = get_padded_intersects(point_a, point_b, fence_polygon, .000001)
+    else:
+        end_points = [point_a, point_b]
+
+
+    # Then run lazy A* to find the best path
+    nodes = list(fence_polygon.exterior.coords[:-1])
+    nodes.append(end_points[0])
+    nodes.append(end_points[1])
+    G = nx.Graph()
+    for i, p in enumerate(nodes):
+        G.add_node(i, pos=p)
+
+    start_idx = len(nodes) - 2
+    goal_idx = len(nodes) - 1
+
+    path = lazy_astar(nodes, start_idx, goal_idx, fence_polygon)
+    if path is None:
+        return None
+    else:
+        final_path = []
+        for point in path:
+            final_path.append(nodes[point])
+        return final_path
+
+
+# Calculate the intersections between the line (point a -> point a) and the polygon, then order them by distance to point a
+def ordered_intersections_by_distance(point_a, point_b, polygon):
+    line = LineString([point_a, point_b])
+    intersection = polygon.intersection(line)
+
+    if isinstance(intersection, LineString):
+        intersection_points = list(intersection.coords)
+    elif hasattr(intersection, 'geoms'):
+        intersection_points = [pt for geom in intersection.geoms for pt in geom.coords]
+    else:
+        intersection_points = []
+
+    return sorted(intersection_points, key=lambda p: shapely.geometry.Point(p).distance(shapely.geometry.Point(point_a)))
+
+
+# Get 2 points inside the polygon that are near where the line (point a -> point b) intersects the polygon
+def get_padded_intersects(point_a, point_b, fence_polygon, padding_length=0.0001):
+    line = LineString([point_a, point_b])
+    intersection_coords = ordered_intersections_by_distance(point_a, point_b, fence_polygon)
+    intersection_coords = [intersection_coords[1], intersection_coords[-2]]
+
+    padded_points = []
+    for i in range(len(intersection_coords)):
+        intersection_point = shapely.geometry.Point(intersection_coords[i])
+        dist_to_a = line.project(intersection_point)
+        if dist_to_a<padding_length or dist_to_a + padding_length > line.length:
+            continue
+        if dist_to_a<padding_length:
+            padded_point = shapely.geometry.Point(point_a)
+        elif dist_to_a + padding_length > line.length:
+            padded_point = shapely.geometry.Point(point_b)
+        elif i==0:
+            padded_point = line.interpolate(dist_to_a - padding_length)
+        else:
+            padded_point = line.interpolate(dist_to_a + padding_length)
+        
+        padded_points.append((padded_point.x, padded_point.y))
+
+    return padded_points
+
+def lazy_astar(nodes, start_idx, goal_idx, polygon):
+    open_set = []
+    heapq.heappush(open_set, (0, start_idx))
+    
+    came_from = {}
+    g_score = {start_idx: 0}
+    
+    while open_set:
+        _, current = heapq.heappop(open_set)
+        
+        if current == goal_idx:
+            # Reconstruct path
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            return path[::-1]
+        
+        for neighbor in range(len(nodes)):
+            if neighbor == current:
+                continue
+            edge = LineString([nodes[current], nodes[neighbor]])
+            midpoint = edge.interpolate(0.5, normalized=True)
+            if not (polygon.contains(edge) or (polygon.touches(edge) and (polygon.contains(midpoint) or polygon.touches(midpoint)))):
+                continue
+
+            
+            tentative_g = g_score[current] + np.linalg.norm(np.array(nodes[current]) - np.array(nodes[neighbor]))
+            if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g
+                f_score = tentative_g + np.linalg.norm(np.array(nodes[neighbor]) - np.array(nodes[goal_idx]))
+                heapq.heappush(open_set, (f_score, neighbor))
+    
+    return None  
+
+# Calculate a list of points to travel from point a to point b while staying inside the polygon
+def calculate_bounded_path(point_a, point_b, fence_polygon, continuous=True):
+    
+
+    # First calculate padded points close to the intersection
+    if continuous:
+        end_points = get_padded_intersects(point_a, point_b, fence_polygon, .000001)
+    else:
+        end_points = [point_a, point_b]
+
+
+    # Then run lazy A* to find the best path
+    nodes = list(fence_polygon.exterior.coords[:-1])
+    nodes.append(end_points[0])
+    nodes.append(end_points[1])
+    G = nx.Graph()
+    for i, p in enumerate(nodes):
+        G.add_node(i, pos=p)
+
+    start_idx = len(nodes) - 2
+    goal_idx = len(nodes) - 1
+
+    path = lazy_astar(nodes, start_idx, goal_idx, fence_polygon)
+    if path is None:
+        return None
+    else:
+        final_path = []
+        for point in path:
+            final_path.append(nodes[point])
+        return final_path
