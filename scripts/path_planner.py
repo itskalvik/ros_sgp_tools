@@ -37,8 +37,6 @@ from message_filters import ApproximateTimeSynchronizer
 from ament_index_python.packages import get_package_share_directory
 
 import tensorflow as tf
-tf.random.set_seed(2024)
-np.random.seed(2024)
 
 
 class PathPlanner(Node):
@@ -69,6 +67,14 @@ class PathPlanner(Node):
         self.data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
         self.get_logger().info(f'Data Folder: {self.data_folder}')
         
+        # Get/set seed
+        self.seed = self.config.get('robot').get('seed')
+        if self.seed is None:
+            self.seed = None
+        else:
+            tf.random.set_seed(self.seed)
+            np.random.seed(self.seed)
+
         # Create h5py file to store sensor data and other mission parameters
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
@@ -100,7 +106,8 @@ class PathPlanner(Node):
         if num_samples is None:
             num_samples = 1000
         self.X_objective = polygon2candidates(self.fence_vertices, 
-                                              num_samples=num_samples)
+                                              num_samples=num_samples,
+                                              seed=self.seed)
         self.X_objective = np.array(self.X_objective).reshape(-1, 2)
         self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_objective)
@@ -226,7 +233,8 @@ class PathPlanner(Node):
             
             # Sample uniform random initial waypoints and compute initial paths
             # Sample one less waypoint per robot and add the home position as the first waypoint
-            X_init = get_inducing_pts(self.X_objective, (self.num_waypoints-1))
+            X_init = get_inducing_pts(self.X_objective, (self.num_waypoints-1),
+                                      seed=self.seed)
             self.get_logger().info(f"Running TSP solver to get the initial path...")
             X_init, _ = run_tsp(X_init,
                                  start_nodes=self.start_location,
