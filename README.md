@@ -10,7 +10,7 @@
 </em>
 </p>
 
-SGP-Tools is a powerful and flexible Python library designed for solving Sensor Placement and Informative Path Planning (IPP) problems, enabling efficient and scalable solutions for environment monitoring, e.g., monitoring air/water quality, soil moisture, or temperature. This ROS 2 package integrates SGP-Tools with the ROS ecosystem, allowing for easy deployment of advanced IPP algorithms on robotic hardware.
+SGP-Tools is a powerful and flexible Python library for solving Sensor Placement and Informative Path Planning (IPP) problems. It enables efficient and scalable solutions for environmental monitoring tasks, such as tracking air and water quality, soil moisture, or temperature. This ROS 2 package integrates SGP-Tools with the ROS ecosystem, allowing for the deployment of these advanced algorithms on robotic hardware.
 
 ## Features ✨
 **Online & Adaptive Path Planning:** Execute IPP missions on real-world hardware. The package is specifically designed for deployment on [ArduPilot-based vehicles](https://ardupilot.org/copter/docs/common-use-cases-and-applications.html).
@@ -49,13 +49,13 @@ SGP-Tools is a powerful and flexible Python library designed for solving Sensor 
     source ~/ros2_ws/install/setup.bash
     ```
 
-## Launch Files & Usage
+## Usage 🚀
 
 ### Running an ASV Mission
 
-The `asv.launch.py` launch file is used to start an Informative Path Planning (IPP) mission with an Ardupilot-based Autonomous Surface Vehicle (ASV).
+To start an Informative Path Planning (IPP) mission with an Ardupilot-based Autonomous Surface Vehicle (ASV), use the `asv.launch.py` launch file.
 
-This will launch all the necessary components, including:
+This will launch all the necessary components:
 * `path_planner.py`: The core node for generating the informative path.
 * `path_follower.py`: The node that controls the ASV to follow the generated path.
 * `mavros.launch`: The bridge for communication with the Ardupilot flight control unit.
@@ -67,49 +67,48 @@ To start the mission, run the following command in your terminal:
 ros2 launch ros_sgp_tools asv.launch.py
 ```
 
+### Mission Configuration
+
+The IPP mission is configured through two files and environment variables:
+
+* **config.yaml:** Located in `ros_sgp_tools/launch/data/`, this file configures the IPP method using arguments from the `sgptools` library.
+  * **`robot`**: Robot settings, including sensor type, data buffer size, mission type (`AdaptiveIPP`, `IPP`, or `Waypoint`), and seed (for reproducibility).
+  * **`sensor`**: Configuration for the sensors.
+  * **`ipp_model`**: IPP model settings, such as the number of waypoints and optimization method.
+  * **`param_model`**: Configuration for the online learning model.
+  * **`hyperparameters`**: Initial values for the GP models' (`ipp_model` and `param_model`) hyperparameters.
+  * **`tsp`**: Configuration for the Traveling Salesperson Problem (TSP) solver.
+* **mission.plan:** Located in `ros_sgp_tools/launch/data/`, this file defines the survey area and launch position using a **polygon-shaped** geofence created in [QGC](https://qgroundcontrol.com/).
+* **Environment Variables:**
+  * `DATA_FOLDER`: The folder where mission logs are saved. Defaults to the launch directory.
+  * `FCU_URL`: The Ardupilot device connection URL. Defaults to `udp://0.0.0.0:14550@`.
+  
+  Set a variable using the export command:
+  ```
+  export <parameter_name>=<parameter_value>
+  ```
+
+**Note:** This package requires over 4GB of available memory (including swap). Ensure your system has sufficient swap space allocated.
+
 ### Visualizing Mission Data
 
-Once a mission is complete, you can use the `visualize_data.launch.py` launch file to inspect the results. This launch file starts the `data_visualizer.py` node to process a mission log and publishes the reconstructed map as a point cloud for viewing in Foxglove.
+After a mission, use the `visualize_data.launch.py` launch file to inspect the results. It processes a mission log and publishes the reconstructed map as a point cloud for viewing in Foxglove.
 
+This launch file starts:
+* `data_visualizer.py`: Publishes the point cloud data.
+* `foxglove_bridge`: Connects to Foxglove for visualization.
 
-* `data_visualizer.py`: publishes the point cloud data.
-* `foxglove_bridge`: to visualize the data in Foxglove.
+#### Launch Arguments
+* `mission_log`: The specific mission log folder to visualize. Defaults to the most recent log in the current directory.
+* `num_samples`: The number of points for visualizing the point cloud. Defaults to `5000`.
 
-The launch file accepts the following arguments:
-
-* `mission_log`: The specific mission log folder to visualize. Defaults to the most recent mission log in the current directory.
-* `num_samples`: The number of points to use for visualizing the point cloud. Defaults to `5000`.
-* `kernel`: The kernel function used for the terrain estimation model. Defaults to `RBF`.
-
-To visualize the data from a specific log folder, run:
-
+To visualize a specific log, run:
 ```bash
 ros2 launch ros_sgp_tools visualize_data.launch.py mission_log:=<log-folder-name>
 ```
 
-## Configuration
+#### Visualizer Configuration
+* **viz_config.yaml:** To customize the visualizer, place this file inside the mission log folder you are viewing.
 
-The behavior of the `ros_sgp_tools` package can be configured using the `config.yaml` file located in `ros_sgp_tools/launch/data/`. This file allows you to configure the IPP method with all the arguments available in the `sgptools` library.
-
-* **`robot`**: Configuration for the robot, including the sensor type, data buffer size, and mission type (`AdaptiveIPP`, `IPP`, or `Waypoint`).
-* **`sensor`**: Configuration for the sensors.
-* **`ipp_model`**: Configuration for the informative path planning model, including the number of waypoints, optimization method, and constraints. The `method` and `optimizer` parameters correspond to the available options in the `sgptools` library.
-* **`param_model`**: Configuration for the parameter model used for online learning.
-* **`hyperparameters`**: Initial values for the hyperparameters of the GP models.
-* **`tsp`**: Configuration for the Traveling Salesperson Problem (TSP) solver.
-
----
-
-## Nodes
-
-### `path_planner.py`
-
-This is the main node for informative path planning. It subscribes to sensor data, updates a Gaussian Process model of the environment, and plans a path to collect more informative data. It provides a service to get the next waypoint and subscribes to the estimated time of arrival to the next waypoint.
-
-### `path_follower.py`
-
-This node controls the vehicle to follow the waypoints provided by the `path_planner`. It's a service client that requests the next waypoint from the `path_planner` and navigates the vehicle to it.
-
-### `data_visualizer.py`
-
-This node is used to visualize the collected data and the reconstructed map. It reads the mission log, processes the data, and publishes it as a point cloud, which can be visualized in tools like Foxglove.
+  * **`hyperparameters`**: Specify the GP model's hyperparameters.
+  * **`optimizer`**: Provide optimizer arguments from the `sgptools` library.
