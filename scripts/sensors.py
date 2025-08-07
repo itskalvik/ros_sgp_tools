@@ -1,5 +1,6 @@
 from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image, LaserScan
 from rclpy.qos import qos_profile_sensor_data, QoSProfile
+from bluerobotics_sonar_msgs.msg import SonarPing1D
 from message_filters import Subscriber
 from cv_bridge import CvBridge
 import numpy as np
@@ -54,9 +55,19 @@ class GazeboPing1D(SensorCallback):
     def process_msg(self, msg, position):
         return [position[:2]], [np.mean(msg.ranges)]
 
-class Ping1D(SerialPing1D):
+class Ping1D(SensorCallback):
     def __init__(self):
-        self.topic = "ping1d/range"
+        self.topic = "sonar/ping1d/data"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        sub = Subscriber(node_obj, SonarPing1D, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg, position):
+        return [position[:2]], [msg.distance] # distance in meters
 
 class Pressure(SensorCallback):
     def __init__(self):

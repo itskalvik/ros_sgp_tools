@@ -77,13 +77,14 @@ def generate_launch_description():
     if sensor=='Ping1D':
         # Ping1D ROS package 
         ping1d_port = config['sensor'][sensor]['port']
-        sensor = Node(package='ping_sonar_ros',
-                      executable='ping1d_node',
-                      name='Ping1D',
-                      parameters=[
-                        {'port': ping1d_port}
-                      ])
-        nodes.append(sensor)   
+        sensor = Node(package='bluerobotics_sonar',
+                       executable='ping1d',
+                       parameters=[{
+                            'mode_auto': 1,
+                            'port': ping1d_port
+                       }],
+                       output='screen')
+        nodes.append(sensor)
     elif sensor=='GazeboPing1D':
         # Gazebo ROS Bridge
         bridge = Node(
