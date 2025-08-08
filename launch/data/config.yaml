@@ -1,9 +1,8 @@
 # Configuration for the robot
 robot:
-  sensor: Ping1D
+  sensor: GazeboPing1D
   data_buffer_size: 200
-  mission_type: AdaptiveIPP # Available Options: AdaptiveIPP, IPP, Waypoint
-  seed: 1234
+  mission_type: Waypoint # Available Options: AdaptiveIPP, IPP, Waypoint
 
 # Configuration for sensor(s)
 sensor:
@@ -12,7 +11,7 @@ sensor:
 
 # Configuration for the informative path planning model
 ipp_model:
-  num_waypoints: 10
+  num_waypoints: 5
   method: ContinuousSGP
   optimizer:
     max_steps: 200
