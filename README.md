@@ -41,7 +41,7 @@
 
   **[docker-sgp-tools](https://github.com/itskalvik/docker-sgp-tools)** provides a one-command, ready-to-go container for simulation and development.
 
-## Installation 🛠️
+## 🛠️ Installation
 
 1.  **Create and initialize a ROS 2 workspace:**
 
