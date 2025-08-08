@@ -174,7 +174,7 @@ Extend the **SensorCallback** class in **sensors.py** with appropriate ROS topic
 
 * **Jupyter notebook** (`postprocess.ipynb`) provided for custom, offline analysis.
 
-### 😵 Troubleshooting & Tips
+### 🤓 Troubleshooting & Tips
 
 * **Memory:** 
 
