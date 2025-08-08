@@ -37,8 +37,6 @@
 
   Mission data is saved as HDF5 logs and can be visualized in **[Foxglove](https://foxglove.dev/)** or analyzed in the provided **Jupyter notebook**.
 
-  Easily configurable to support a variety of sensors, such as the [Ping1D sonar](https://bluerobotics.com/store/sonars/echosounders/ping-sonar-r2-rp/), making it adaptable to different mission requirements.
-
 * **Docker Support**
 
   **[docker-sgp-tools](https://github.com/itskalvik/docker-sgp-tools)** provides a one-command, ready-to-go container for simulation and development.
