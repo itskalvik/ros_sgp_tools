@@ -13,6 +13,7 @@ from utils import LatLonStandardScaler, StandardScaler, point_cloud
 
 import gpflow
 gpflow.config.set_default_float(np.float32)
+gpflow.config.set_default_jitter(1e-2)
 
 from sgptools.utils.misc import polygon2candidates
 from sgptools.kernels import get_kernel
@@ -63,7 +64,7 @@ class DataVisualizer(Node):
             force_training = False
             self.kernel = 'RBF'
             kernel =  get_kernel(self.kernel)()
-            noise_variance = 0.1
+            noise_variance = 0.01
             optimizer_kwargs = {}
 
         # Load the data file

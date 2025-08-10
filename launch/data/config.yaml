@@ -1,6 +1,6 @@
 # Configuration for the robot
 robot:
-  sensor: Ping1D
+  sensor: GazeboPing1D
   data_buffer_size: 200
   mission_type: AdaptiveIPP # Available Options: AdaptiveIPP, IPP, Waypoint
   seed: 1234
@@ -35,11 +35,11 @@ param_model:
 
 # Configuration for the hyperparameters (initial values) used in the ipp and param models
 hyperparameters:
-  noise_variance: 1e-4
+  noise_variance: 1e-2
   kernel_function: RBF
   kernel: # Kernel function kwargs
     variance: 0.01
-    lengthscales: 1.0
+    lengthscales: 0.1
 
 # Configuration for the TSP solver
 tsp:

@@ -17,6 +17,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from time import gmtime, strftime
 
+import gpflow
+gpflow.config.set_default_float(np.float32)
+gpflow.config.set_default_jitter(1e-2)
+
 from sgptools.methods import get_method
 from sgptools.kernels import get_kernel
 from sgptools.utils.tsp import run_tsp, resample_path
@@ -112,6 +116,7 @@ class PathPlanner(Node):
         self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_objective)
         self.X_objective = self.X_scaler.transform(self.X_objective)
+        self.X_objective = self.X_objective.astype(np.float32)
         self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]))
 
         if self.mission_type == 'Waypoint':
@@ -127,7 +132,7 @@ class PathPlanner(Node):
         # Compute distances between waypoints for estimating waypoint arrival time
         lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
         self.distances = haversine(lat_lon_waypoints[1:], 
-                                    lat_lon_waypoints[:-1])
+                                   lat_lon_waypoints[:-1])
 
         # Save fence_vertices and initial path to the data store
         self.data_file.create_dataset("fence_vertices", 
@@ -315,8 +320,8 @@ class PathPlanner(Node):
 
             # Make local copies of the data and clear the data buffers         
             self.data_lock.acquire()
-            data_X = np.array(self.data_X).reshape(-1, 2).astype(float)
-            data_y = np.array(self.data_y).reshape(-1, 1).astype(float)
+            data_X = np.array(self.data_X).reshape(-1, 2)
+            data_y = np.array(self.data_y).reshape(-1, 1)
             self.data_X = []
             self.data_y = []
             self.data_lock.release()
@@ -416,7 +421,9 @@ class PathPlanner(Node):
 
         # Normalize the data, use running mean and std for sensor data
         X_new = self.X_scaler.transform(X_new)
+        X_new = X_new.astype(np.float32)
         y_new = (y_new - self.stats.mean) / self.stats.std
+        y_new = y_new.astype(np.float32)
         self.get_logger().info(f'Data Mean: {self.stats.mean}')
         self.get_logger().info(f'Data Std: {self.stats.std}')
 
