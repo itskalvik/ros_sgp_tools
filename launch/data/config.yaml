@@ -39,7 +39,7 @@ hyperparameters:
   kernel_function: RBF
   kernel: # Kernel function kwargs
     variance: 0.01
-    lengthscales: 0.1
+    lengthscales: 1.0
 
 # Configuration for the TSP solver
 tsp:

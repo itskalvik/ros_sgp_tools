@@ -13,13 +13,15 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, \
                                   ReentrantCallbackGroup
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('agg')
 
 import numpy as np
 from time import gmtime, strftime
 
 import gpflow
 gpflow.config.set_default_float(np.float32)
-gpflow.config.set_default_jitter(1e-2)
+gpflow.config.set_default_jitter(1e-1)
 
 from sgptools.methods import get_method
 from sgptools.kernels import get_kernel
