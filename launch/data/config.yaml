@@ -35,7 +35,7 @@ param_model:
 
 # Configuration for the hyperparameters (initial values) used in the ipp and param models
 hyperparameters:
-  noise_variance: 1e-2
+  noise_variance: 0.01
   kernel_function: RBF
   kernel: # Kernel function kwargs
     variance: 0.01
