@@ -38,21 +38,22 @@ def generate_launch_description():
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
 
     nodes = []
+    # Path Planner
     path_planner = Node(package='ros_sgp_tools',
                         executable='path_planner.py',
-                        output='screen',
                         parameters=[
                             {'geofence_plan': geofence_plan,
                              'config_file': config_file,
                              'data_folder': data_folder
-                            }
-                        ])
+                            }],
+                        output='screen')
     nodes.append(path_planner)
 
-    # MAVROS controller
+    # MAVROS Controller
     path_follower = Node(package='ros_sgp_tools',
                          executable='path_follower.py',
-                         parameters=[{'xy_tolerance': 1.0}])
+                         parameters=[{'xy_tolerance': 1.0}],
+                         output='screen')
     nodes.append(path_follower)
 
     # MAVROS
@@ -74,16 +75,13 @@ def generate_launch_description():
                 )
     nodes.append(mavros)
 
+    # Sensor Node
     if sensor=='Ping1D':
         # Ping1D ROS package 
-        ping1d_port = config['sensor'][sensor]['port']
         sensor = Node(package='bluerobotics_sonar',
-                       executable='ping1d',
-                       parameters=[{
-                            'mode_auto': 1,
-                            'port': ping1d_port
-                       }],
-                       output='screen')
+                      executable='ping1d',
+                      parameters=[config['sensor'][sensor]],
+                      output='screen')
         nodes.append(sensor)
     elif sensor=='GazeboPing1D':
         # Gazebo ROS Bridge

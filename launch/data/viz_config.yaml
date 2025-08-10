@@ -1,0 +1,14 @@
+# Force training the model even if pretarained model exists
+force_training: True
+
+# kwargs for sgptools.utils.gpflow.optimize_model method
+optimizer:
+  max_steps: 1000
+
+# Configuration for the GP hyperparameters (initial values)
+hyperparameters:
+  noise_variance: 1e-4
+  kernel_function: RBF
+  kernel:
+    variance: 0.01
+    lengthscales: 1.0

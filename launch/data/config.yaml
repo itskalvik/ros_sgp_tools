@@ -7,16 +7,17 @@ robot:
 
 # Configuration for sensor(s)
 sensor:
-  Ping1D:
+  Ping1D: # Sensor node ros parameters
     port: /dev/ttyUSB0
+    mode_auto: 1 # Auto range mode
 
 # Configuration for the informative path planning model
 ipp_model:
-  num_waypoints: 10
-  method: ContinuousSGP
-  optimizer:
+  num_waypoints: 40
+  method: ContinuousSGP # Method class from sgptools.methods
+  optimizer: # kwargs for method.optimize()
     max_steps: 200
-  transform:
+  transform: # Transform object kwargs
     sampling_rate: 2
     # Budget in meters
     distance_budget:
@@ -29,14 +30,14 @@ param_model:
   method: SSGP # Available Options: SSGP
   num_inducing: 40
   train_inducing: True
-  optimizer:
+  optimizer: # kwargs for sgptools.utils.gpflow.optimize_model method
     max_steps: 200
 
 # Configuration for the hyperparameters (initial values) used in the ipp and param models
 hyperparameters:
   noise_variance: 1e-4
   kernel_function: RBF
-  kernel:
+  kernel: # Kernel function kwargs
     variance: 0.01
     lengthscales: 1.0
 

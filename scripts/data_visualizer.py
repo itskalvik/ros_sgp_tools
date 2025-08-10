@@ -32,11 +32,11 @@ class DataVisualizer(Node):
         self.declare_parameter('data_folder', '')
         data_folder = self.get_parameter('data_folder').get_parameter_value().string_value
 
-        self.declare_parameter('num_samples', 5000)
-        self.num_samples = self.get_parameter('num_samples').get_parameter_value().integer_value
-
         self.declare_parameter('mission_log', '')
         mission_log = self.get_parameter('mission_log').get_parameter_value().string_value
+
+        self.declare_parameter('num_samples', 5000)
+        self.num_samples = self.get_parameter('num_samples').get_parameter_value().integer_value
 
         # Get the latest log folder
         if mission_log == '':
@@ -49,19 +49,19 @@ class DataVisualizer(Node):
             self.get_logger().info(f'Config File: {config_fname}')
             with open(config_fname, 'r') as file:
                 self.config = yaml.safe_load(file)
-            hyperparameter_config = self.config['hyperparameters']
-            self.kernel = hyperparameter_config['kernel_function']
-            kernel_kwargs = hyperparameter_config.get('kernel')
-            if kernel_kwargs is None:
-                kernel_kwargs = {}
+            force_training = self.config.get('force_training', False)
+            hyperparameter_config = self.config.get('hyperparameters', {})
+            self.kernel = hyperparameter_config.get('kernel_function', 'RBF')
+            kernel_kwargs = hyperparameter_config.get('kernel', {})
             kernel = get_kernel(self.kernel)(**kernel_kwargs)
-            noise_variance = float(hyperparameter_config['noise_variance'])
-            optimizer_kwargs = self.config.get('optimizer')
+            noise_variance = float(hyperparameter_config.get('noise_variance', 1e-4))
+            optimizer_kwargs = self.config.get('optimizer', {})
         else:
+            force_training = False
             self.kernel = 'RBF'
             kernel =  get_kernel(self.kernel)()
             noise_variance = 0.1
-            self.optimizer_kwargs = {}
+            optimizer_kwargs = {}
 
         # Load the data file
         self.fname = os.path.join(data_folder, 
@@ -94,14 +94,12 @@ class DataVisualizer(Node):
 
         # Train GP only if pretrained weights are unavailable
         fname = os.path.join(data_folder, mission_log, f"{self.kernel}Params.pkl")
-        if os.path.exists(fname):
+        if os.path.exists(fname) and not force_training:
             with open(fname, 'rb') as handle:
                 params = pickle.load(handle)
             optimizer_kwargs['max_steps'] = 0
             self.get_logger().info('Found pre-trained parameters')
         else:
-            if optimizer_kwargs.get('max_steps') is None:
-                optimizer_kwargs['max_steps'] = 1500
             params = None
             self.get_logger().info('Training from scratch')
         _, _, _, self.gpr_gt = get_model_params(self.X, self.y,
