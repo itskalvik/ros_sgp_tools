@@ -11,14 +11,12 @@ import pickle
 import numpy as np
 from utils import LatLonStandardScaler, StandardScaler, point_cloud
 
-import gpflow
-gpflow.config.set_default_float(np.float32)
-gpflow.config.set_default_jitter(1e-2)
-
 from sgptools.utils.misc import polygon2candidates
 from sgptools.kernels import get_kernel
 from sgptools.utils.metrics import *
 from sgptools.utils.gpflow import *
+
+from gpflow.config import default_float
 
 tf.random.set_seed(2024)
 np.random.seed(2024)
@@ -56,6 +54,15 @@ class DataVisualizer(Node):
             force_training = self.config.get('force_training', False)
             hyperparameter_config = self.config.get('hyperparameters', {})
             self.kernel = hyperparameter_config.get('kernel_function', 'RBF')
+
+            # Use float32 and higher jitter for deep learning model based kernel functions
+            if self.kernel in ['Attentive', 'NeuralSpectral']:
+                gpflow.config.set_default_float(np.float32)
+                gpflow.config.set_default_jitter(1e-1)
+            else:
+                gpflow.config.set_default_float(np.float64)
+                gpflow.config.set_default_jitter(1e-6)
+
             kernel_kwargs = hyperparameter_config.get('kernel', {})
             kernel = get_kernel(self.kernel)(**kernel_kwargs)
             noise_variance = float(hyperparameter_config.get('noise_variance', 1e-4))
@@ -74,9 +81,9 @@ class DataVisualizer(Node):
         if not os.path.exists(self.fname):
             raise ValueError(f'Data file not found: {self.fname}')
         with h5py.File(self.fname, "r") as f:
-            self.fence_vertices = f["fence_vertices"][:].astype(float)
-            self.X = f["X"][:].astype(float)
-            self.y = f["y"][:].astype(float)
+            self.fence_vertices = f["fence_vertices"][:]
+            self.X = f["X"][:]
+            self.y = f["y"][:]
 
         self.get_logger().info(f'Data Folder: {data_folder}')
         self.get_logger().info(f'Mission Log: {mission_log}')
@@ -97,8 +104,8 @@ class DataVisualizer(Node):
         self.y = self.y_scaler.fit_transform(self.y)
 
         # Cast to float32 for compatibility with GPflow
-        self.X = self.X.astype(np.float32)
-        self.y = self.y.astype(np.float32)
+        self.X = self.X.astype(default_float())
+        self.y = self.y.astype(default_float())
 
         # Train GP only if pretrained weights are unavailable
         fname = os.path.join(data_folder, mission_log, f"{self.kernel}Params.pkl")
@@ -151,7 +158,7 @@ class DataVisualizer(Node):
             X_candidates = polygon2candidates(self.fence_vertices, 
                                               num_samples=self.num_samples)
             X_candidates = self.X_scaler.transform(X_candidates)
-            X_candidates = X_candidates.astype(np.float32)
+            X_candidates = X_candidates.astype(default_float())
             self.candidates_y = self.gpr_gt.predict_f(X_candidates)[0].numpy()
             self.point_cloud_msg = point_cloud(np.concatenate([X_candidates,
                                                                -self.candidates_y], 

@@ -19,10 +19,7 @@ matplotlib.use('agg')
 import numpy as np
 from time import gmtime, strftime
 
-import gpflow
-gpflow.config.set_default_float(np.float32)
-gpflow.config.set_default_jitter(1e-1)
-
+from gpflow.config import default_float
 from sgptools.methods import get_method
 from sgptools.kernels import get_kernel
 from sgptools.utils.tsp import run_tsp, resample_path
@@ -81,6 +78,15 @@ class PathPlanner(Node):
             tf.random.set_seed(self.seed)
             np.random.seed(self.seed)
 
+        # Use float32 and higher jitter for deep learning model based kernel functions
+        kernel_fn = self.config['hyperparameters']['kernel_function']
+        if kernel_fn in ['Attentive', 'NeuralSpectral']:
+            gpflow.config.set_default_float(np.float32)
+            gpflow.config.set_default_jitter(1e-1)
+        else:
+            gpflow.config.set_default_float(np.float64)
+            gpflow.config.set_default_jitter(1e-6)
+
         # Create h5py file to store sensor data and other mission parameters
         time_stamp = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
         self.data_folder = os.path.join(self.data_folder, f'IPP-mission-{time_stamp}')
@@ -118,7 +124,7 @@ class PathPlanner(Node):
         self.X_scaler = LatLonStandardScaler()
         self.X_scaler.fit(self.X_objective)
         self.X_objective = self.X_scaler.transform(self.X_objective)
-        self.X_objective = self.X_objective.astype(np.float32)
+        self.X_objective = self.X_objective.astype(default_float())
         self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]))
 
         if self.mission_type == 'Waypoint':
@@ -230,7 +236,7 @@ class PathPlanner(Node):
     def init_models(self, init_ipp_model=True, init_param_model=True):
         hyperparameter_config = self.config['hyperparameters']
         self.kernel = hyperparameter_config['kernel_function']
-        kernel_kwargs = hyperparameter_config['kernel']
+        kernel_kwargs = hyperparameter_config.get('kernel', {})
         kernel = get_kernel(self.kernel)(**kernel_kwargs)
         noise_variance = float(hyperparameter_config['noise_variance'])
 
@@ -423,9 +429,9 @@ class PathPlanner(Node):
 
         # Normalize the data, use running mean and std for sensor data
         X_new = self.X_scaler.transform(X_new)
-        X_new = X_new.astype(np.float32)
+        X_new = X_new.astype(default_float())
         y_new = (y_new - self.stats.mean) / self.stats.std
-        y_new = y_new.astype(np.float32)
+        y_new = y_new.astype(default_float())
         self.get_logger().info(f'Data Mean: {self.stats.mean}')
         self.get_logger().info(f'Data Std: {self.stats.std}')
 
