@@ -11,6 +11,9 @@ import pickle
 import numpy as np
 from utils import LatLonStandardScaler, StandardScaler, point_cloud
 
+import gpflow
+gpflow.config.set_default_float(np.float32)
+
 from sgptools.utils.misc import polygon2candidates
 from sgptools.kernels import get_kernel
 from sgptools.utils.metrics import *
@@ -92,6 +95,10 @@ class DataVisualizer(Node):
         self.y_scaler = StandardScaler()
         self.y = self.y_scaler.fit_transform(self.y)
 
+        # Cast to float32 for compatibility with GPflow
+        self.X = self.X.astype(np.float32)
+        self.y = self.y.astype(np.float32)
+
         # Train GP only if pretrained weights are unavailable
         fname = os.path.join(data_folder, mission_log, f"{self.kernel}Params.pkl")
         if os.path.exists(fname) and not force_training:
@@ -143,6 +150,7 @@ class DataVisualizer(Node):
             X_candidates = polygon2candidates(self.fence_vertices, 
                                               num_samples=self.num_samples)
             X_candidates = self.X_scaler.transform(X_candidates)
+            X_candidates = X_candidates.astype(np.float32)
             self.candidates_y = self.gpr_gt.predict_f(X_candidates)[0].numpy()
             self.point_cloud_msg = point_cloud(np.concatenate([X_candidates,
                                                                -self.candidates_y], 
