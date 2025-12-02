@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 
 import os
-import time
 import h5py
 import yaml
 import shutil
@@ -227,7 +226,7 @@ class PathPlanner(Node):
         self.waypoints_lock.acquire()
         response.new_waypoint = True
         waypoint = self.waypoints[self.current_waypoint].reshape(1, -1)
-        waypoint = self.X_scaler.inverse_transform(waypoint)[0]
+        waypoint -= self.start_location # Shift waypoints so that the start is at (0, 0)
         response.waypoint = Point(x=waypoint[0],
                                   y=waypoint[1])
         self.waypoints_lock.release()
