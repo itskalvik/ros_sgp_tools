@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from mavros_control.controller import Controller
+from aqua2_control.controller import Controller
 from ros_sgp_tools.srv import Waypoint
 from rclpy.node import Node
 import rclpy
@@ -30,8 +30,7 @@ class WaypointServiceClient(Node):
 class PathFollower(Controller):
 
     def __init__(self):
-        super().__init__(navigation_type=0,
-                         start_mission=False)
+        super().__init__()
 
         # Create the waypoint service client
         self.waypoint_service = WaypointServiceClient()
@@ -39,24 +38,12 @@ class PathFollower(Controller):
 
     def mission(self):
         """IPP mission"""
-        self.get_logger().info('Engaging GUIDED mode')
-        if self.set_mode('GUIDED'):
-            self.get_logger().info('GUIDED mode Engaged')
-
-        self.get_logger().info('Setting current positon as home')
-        if self.set_home(self.vehicle_position[0], self.vehicle_position[1]):
-            self.get_logger().info('Home position set')
-
-        self.get_logger().info('Arming')
-        if self.arm(True):
-            self.get_logger().info('Armed')
-
         while rclpy.ok():
             waypoint = self.waypoint_service.get_waypoint()
             if waypoint is None:
                 break
             self.get_logger().info(f'Visiting waypoint: {waypoint[0]} {waypoint[1]}')
-            if self.go2waypoint([waypoint[0], waypoint[1], 0.0]):
+            if self.go2waypoint([waypoint[0], waypoint[1]]):
                 self.get_logger().info(f'Reached waypoint')
 
         self.get_logger().info('Disarming')

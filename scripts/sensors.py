@@ -1,7 +1,9 @@
 from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image, LaserScan
 from rclpy.qos import qos_profile_sensor_data, QoSProfile
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from bluerobotics_sonar_msgs.msg import SonarPing1D
 from message_filters import Subscriber
+from nav_msgs.msg import Odometry
 from cv_bridge import CvBridge
 import numpy as np
 
@@ -26,6 +28,36 @@ class GPS(SensorCallback):
     
     def process_msg(self, msg):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
+    
+class DVL(SensorCallback):
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/dvl/position_estimate"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        sub =  Subscriber(node_obj, PoseWithCovarianceStamped,
+                          self.topic,
+                          qos_profile=qos_profile_sensor_data,
+                          callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg):
+        return np.array([msg.pose.pose.position.x,
+                         msg.pose.pose.position.y,
+                         msg.pose.pose.position.z])
+
+class AquaPing1D(SensorCallback):
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/depth"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        sub = Subscriber(node_obj, Odometry, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg, position):
+        return [position[:2]], [msg.pose.pose.position.z]
 
 class SerialPing1D(SensorCallback):
     def __init__(self):

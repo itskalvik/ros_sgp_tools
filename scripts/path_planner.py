@@ -171,7 +171,7 @@ class PathPlanner(Node):
         sensor_subscribers = []
         sensor_group = ReentrantCallbackGroup()
 
-        data_obj = getattr(sensors_module, 'GPS')()
+        data_obj = getattr(sensors_module, 'DVL')()
         self.sensors.append(data_obj)
         sensor_subscribers.append(data_obj.get_subscriber(self,
                                                           callback_group=sensor_group))
@@ -199,7 +199,7 @@ class PathPlanner(Node):
                             'waypoint',
                             self.waypoint_service_callback)
         self.create_subscription(
-            Float32MultiArray, 'mavros/waypoint_eta', 
+            Float32MultiArray, 'waypoint_eta', 
             self.eta_callback,
             rclpy.qos.qos_profile_sensor_data)
         
