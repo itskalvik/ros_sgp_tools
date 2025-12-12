@@ -38,8 +38,8 @@ from gpflow.config import default_float
 from sgptools.methods import get_method
 from sgptools.kernels import get_kernel
 from sgptools.utils.tsp import run_tsp, resample_path
-from sgptools.utils.misc import polygon2candidates, project_waypoints
-from sgptools.utils.gpflow import *
+from sgptools.utils.misc import polygon2candidates, project_waypoints, get_inducing_pts
+from sgptools.utils.gpflow import get_model_params, optimize_model
 from sgptools.core.transformations import IPPTransform
 from sgptools.core.osgpr import init_osgpr
 
@@ -48,7 +48,14 @@ from utils import *  # LatLonStandardScaler, get_mission_plan, haversine, Runnin
 
 class PathPlanner(Node):
     """
-    Informative path planner
+    Informative path / coverage planner with multiple mission types:
+      - Waypoint: use static mission plan waypoints.
+      - IPP: offline informative path planning with GP model.
+      - AdaptiveIPP: online adaptive IPP with GP parameter updates.
+      - Coverage: two-stage coverage mission:
+          1) initial exploratory path for data collection,
+          2) kernel fit from data and offline coverage planning,
+             then execute coverage path.
     """
 
     def __init__(self) -> None:
@@ -57,12 +64,12 @@ class PathPlanner(Node):
 
         # Internal flags/state
         self._shutdown_requested: bool = False
-        self.mission_type: str = 'Waypoint'  # default, may be overwritten
+        self.mission_type: str = 'Waypoint'  # default, overwritten by config
 
         # Core initialization steps
         self._load_config_and_plan()
         self._init_random_seeds()
-        if self.mission_type != 'Waypoint':
+        if self.mission_type in ('IPP', 'AdaptiveIPP', 'Coverage'):
             # Only non-Waypoint missions require GP hyperparameters
             self._init_gp_settings()
         self._init_objective_and_scaler()
@@ -114,16 +121,16 @@ class PathPlanner(Node):
         if robot_cfg is None:
             raise RuntimeError("Missing 'robot' section in config.yaml")
 
-        # Mission type: Waypoint missions do NOT require hyperparameters
+        # Mission type
         self.mission_type = robot_cfg.get('mission_type', 'Waypoint')
         self.get_logger().info(f"Mission type: {self.mission_type}")
 
-        if self.mission_type in ('IPP', 'AdaptiveIPP'):
-            # For IPP/AdaptiveIPP we *do* require hyperparameters
+        if self.mission_type in ('IPP', 'AdaptiveIPP', 'Coverage'):
+            # For IPP/AdaptiveIPP/Coverage we require hyperparameters
             if 'hyperparameters' not in self.config:
                 raise RuntimeError(
                     "Missing 'hyperparameters' section in config.yaml "
-                    "for IPP/AdaptiveIPP mission."
+                    "for IPP/AdaptiveIPP/Coverage mission."
                 )
 
         # Base data folder
@@ -160,8 +167,6 @@ class PathPlanner(Node):
 
     def _init_objective_and_scaler(self) -> None:
         """Set up objective point cloud, mission type, and coordinate scaler."""
-        robot_cfg = self.config.get('robot', {})
-
         # Get mission plan (fence and start location) and optional waypoints
         if self.mission_type == 'Waypoint':
             self.fence_vertices, self.start_location, waypoints = get_mission_plan(
@@ -172,11 +177,12 @@ class PathPlanner(Node):
             self.fence_vertices, self.start_location = get_mission_plan(
                 self.plan_fname, get_waypoints=False
             )
-            self.waypoints = None  # will be set by IPP model if needed
+            self.waypoints = None  # will be set by IPP/Coverage model if needed
 
         ipp_cfg = self.config.get('ipp_model', {})
         num_samples = ipp_cfg.get('num_samples', 1000)
 
+        # Candidate set for objective
         self.X_objective = polygon2candidates(
             self.fence_vertices, num_samples=num_samples, seed=self.seed
         )
@@ -197,7 +203,7 @@ class PathPlanner(Node):
             self.waypoints = self.X_scaler.transform(self.waypoints)
 
     def _init_mission_models_and_waypoints(self) -> None:
-        """Initialize IPP and/or parameter models, and ensure waypoints are set."""
+        """Initialize IPP, Coverage, and/or parameter models, and ensure waypoints are set."""
         # Optional IPP model & param model handle
         self.ipp_model = None
         self.ipp_model_config = None
@@ -210,12 +216,18 @@ class PathPlanner(Node):
         self.param_model_method = None
         self.train_param_inducing = True
         self.num_param_inducing = 0
-        self.kernel_name = getattr(self, "kernel_name", None)  # may be set only for non-Waypoint
+        self.kernel_name = getattr(self, "kernel_name", None)
+
+        # Coverage-specific state
+        self.coverage_phase: str = "none"   # "initial" or "coverage"
+        self.coverage_planned: bool = False
+        self.coverage_waypoints: Optional[np.ndarray] = None
+        self.coverage_model = None
+        self.coverage_fovs = None
 
         mission_type = self.mission_type
 
-        if mission_type in ('IPP', 'AdaptiveIPP'):
-            # We know hyperparameters section exists (checked in _load_config_and_plan)
+        if mission_type in ('IPP', 'AdaptiveIPP', 'Coverage'):
             hyper_cfg = self.config['hyperparameters']
             self.kernel_name = hyper_cfg['kernel_function']
             kernel_kwargs = hyper_cfg.get('kernel', {})
@@ -238,10 +250,41 @@ class PathPlanner(Node):
                     kernel=kernel,
                     noise_variance=noise_variance,
                 )
+            elif mission_type == 'Coverage':
+                # Two-stage coverage mission:
+                #   1) Initial exploratory path (TSP over candidates),
+                #   2) Later: kernel fit + coverage planning (from collected data).
+                coverage_cfg = self.config.get('ipp_model', {})
+                self.num_waypoints = coverage_cfg.get('num_waypoints', 20)
+
+                self.get_logger().info(
+                    f"Coverage mission: generating initial exploratory path with "
+                    f"{self.num_waypoints} points."
+                )
+                X_init = get_inducing_pts(
+                    self.X_objective,
+                    num_inducing=self.num_waypoints,
+                    seed=self.seed,
+                )
+                self.get_logger().info("Running TSP solver to get initial coverage path...")
+                X_init, _ = run_tsp(
+                    X_init,
+                    start_nodes=self.start_location,
+                    **self.config.get('tsp', {}),
+                )
+                X_init = np.array(X_init)[0]
+                X_init = project_waypoints(X_init, self.X_objective)
+
+                self.waypoints = X_init
+                self.coverage_phase = "initial"
+                self.coverage_planned = False
+                self.coverage_model = None
+                self.coverage_waypoints = None
+                self.coverage_fovs = None
         elif mission_type == 'Waypoint':
-            # Pure waypoint mission: NO IPP and NO param model; no hyperparameters required
+            # Pure waypoint mission: NO IPP / Coverage / param model; no hyperparameters required
             self.get_logger().info(
-                'Waypoint mission: skipping IPP and parameter model initialization.'
+                'Waypoint mission: skipping IPP, Coverage, and parameter model initialization.'
             )
         else:
             raise ValueError(f'Invalid mission type: {mission_type}')
@@ -308,6 +351,8 @@ class PathPlanner(Node):
         # Setup runtime/data-related state
         self.data_X: List[np.ndarray] = []
         self.data_y: List[np.ndarray] = []
+        self.all_X: List[np.ndarray] = []   # all samples for coverage kernel fit
+        self.all_y: List[np.ndarray] = []
         self.current_waypoint: int = -1
         self.data_lock = Lock()
         self.waypoints_lock = Lock()
@@ -393,6 +438,116 @@ class PathPlanner(Node):
             super().destroy_node()
 
     # -------------------------------------------------------------------------
+    # Coverage mission: kernel fitting + coverage planning
+    # -------------------------------------------------------------------------
+
+    def plan_coverage_from_data(self) -> None:
+        """
+        Fit the kernel from collected data (initial path) and generate a
+        coverage path, similar in spirit to the benchmark script:
+          1) Use all_X/all_y as training data.
+          2) Fit kernel with get_model_params using config['hyperparameters'].
+          3) Compute max prior variance over X_objective.
+          4) Use ipp_model settings to build coverage model and optimize.
+        """
+        if self.coverage_planned:
+            return
+
+        if len(self.all_X) == 0:
+            self.get_logger().warning(
+                "No data collected for coverage kernel fitting; "
+                "using X_objective with dummy zero targets."
+            )
+            X_train = self.X_objective.copy()
+            y_train = np.zeros((X_train.shape[0], 1), dtype=float)
+        else:
+            X_train = np.array(self.all_X, dtype=float).reshape(-1, 2)
+            y_train = np.array(self.all_y, dtype=float).reshape(-1, 1)
+
+        # Scale X_train into GP space
+        X_train_scaled = self.X_scaler.transform(X_train).astype(default_float())
+        y_train = y_train.astype(default_float())
+
+        # Build base kernel from config hyperparameters
+        hyper_cfg = self.config['hyperparameters']
+        kernel_kwargs = hyper_cfg.get('kernel', {})
+        base_kernel = get_kernel(self.kernel_name)(**kernel_kwargs)
+
+        self.get_logger().info(
+            f"Fitting GP kernel '{self.kernel_name}' on "
+            f"{X_train_scaled.shape[0]} samples for coverage..."
+        )
+
+        # Fit kernel + noise variance (like benchmark get_model_params)
+        _, noise_variance, kernel, init_model = get_model_params(
+            X_train=X_train_scaled,
+            y_train=y_train,
+            kernel=base_kernel,
+            return_model=True,
+            verbose=False,
+        )
+
+        # Compute max prior variance over candidate set
+        prior_mean, prior_var = init_model.predict_f(self.X_objective)
+        max_prior_var = float(prior_var.numpy().max())
+        self.get_logger().info(f"Max prior variance on objective set: {max_prior_var:.4f}")
+
+        # Coverage configuration
+        coverage_cfg = self.config.get('ipp_model', {})
+        method_name = coverage_cfg.get('method', 'HexCoverage')
+        num_sensing = len(self.X_objective)
+
+        # var_threshold: either explicit, or variance_ratio * max_prior_var
+        var_threshold = coverage_cfg.get('var_threshold')
+        if var_threshold is None:
+            var_ratio = coverage_cfg.get('variance_ratio', 0.5)
+            var_threshold = max_prior_var * float(var_ratio)
+            self.get_logger().info(
+                f"Coverage var_threshold not provided; using "
+                f"max_prior_var * variance_ratio = {max_prior_var:.4f} * {var_ratio:.2f} "
+                f"= {var_threshold:.4f}"
+            )
+        else:
+            self.get_logger().info(f"Using explicit coverage var_threshold={var_threshold}")
+
+        optimizer_kwargs = coverage_cfg.get('optimizer', {})
+
+        # Instantiate coverage planner (similar to benchmark's cmodel)
+        coverage_model_cls = get_method(method_name)
+        self.coverage_model = coverage_model_cls(
+            num_sensing=num_sensing,
+            X_objective=self.X_objective,
+            kernel=kernel,
+            noise_variance=noise_variance,
+        )
+
+        self.get_logger().info(
+            f"Running coverage planner optimize() with method={method_name}..."
+        )
+        X_sol, fovs = self.coverage_model.optimize(
+            var_threshold=var_threshold,
+            return_fovs=True,
+            start_nodes=self.start_location,
+            **optimizer_kwargs,
+        )
+        X_sol = np.array(X_sol)[0]
+        X_sol = project_waypoints(X_sol, self.X_objective)
+
+        self.coverage_fovs = fovs
+        self.coverage_waypoints = X_sol
+        self.coverage_planned = True
+
+        self.plot_paths(
+            f"coverage_solution-{strftime('%H-%M-%S', gmtime())}",
+            self.coverage_waypoints,
+            update_waypoint=-1,
+        )
+
+        self.get_logger().info(
+            f"Coverage planner produced {len(self.coverage_waypoints)} waypoints."
+        )
+
+    # -------------------------------------------------------------------------
     # Callbacks
     # -------------------------------------------------------------------------
 
@@ -413,7 +568,9 @@ class PathPlanner(Node):
     ) -> Waypoint.Response:
         """
         Handle requests for the next waypoint.
-        If the path follower fails to reach a waypoint, request shutdown.
+        For Coverage:
+          - First, execute initial path.
+          - After initial path is done, fit kernel and generate coverage path.
         """
         if not request.ok:
             self.get_logger().error(
@@ -425,6 +582,55 @@ class PathPlanner(Node):
 
         self.current_waypoint += 1
 
+        # Coverage mission: handle phase transitions
+        if self.mission_type == 'Coverage':
+            # Finished current phase's path?
+            if self.coverage_phase == "initial" and self.current_waypoint >= len(self.waypoints):
+                self.get_logger().info(
+                    "Initial coverage path complete; fitting kernel and planning coverage path..."
+                )
+                try:
+                    self.plan_coverage_from_data()
+                except Exception as e:
+                    self.get_logger().error(
+                        f"Coverage planning failed with error: {e}\n{traceback.format_exc()}"
+                    )
+                    self.request_shutdown("Coverage planning failed")
+                    response.new_waypoint = False
+                    return response
+
+                # Switch to coverage phase and start at first coverage waypoint
+                self.coverage_phase = "coverage"
+                self.current_waypoint = 0
+
+                with self.waypoints_lock:
+                    self.waypoints = self.coverage_waypoints
+                    lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
+                    self.distances = haversine(
+                        lat_lon_waypoints[1:], lat_lon_waypoints[:-1]
+                    )
+                    waypoint = self.waypoints[self.current_waypoint].reshape(1, -1)
+                    waypoint = self.X_scaler.inverse_transform(waypoint)[0]
+
+                self.get_logger().info(
+                    f"Starting coverage path, waypoint index {self.current_waypoint}"
+                )
+                response.new_waypoint = True
+                response.waypoint = Point(
+                    x=float(waypoint[0]),
+                    y=float(waypoint[1]),
+                )
+                return response
+
+            elif self.coverage_phase == "coverage" and self.current_waypoint >= len(
+                self.waypoints
+            ):
+                # Final mission completion
+                self.get_logger().info("Coverage mission complete.")
+                response.new_waypoint = False
+                return response
+
+        # Non-coverage (or ongoing coverage) behavior:
         if self.current_waypoint >= len(self.waypoints):
             response.new_waypoint = False
             return response
@@ -460,6 +666,10 @@ class PathPlanner(Node):
             with self.data_lock:
                 self.data_X.extend(data_X)
                 self.data_y.extend(data_y)
+                # Accumulate all data for coverage kernel fit as well
+                if self.mission_type == "Coverage":
+                    self.all_X.extend(data_X)
+                    self.all_y.extend(data_y)
 
     # -------------------------------------------------------------------------
     # Model initialization and updates (used only for IPP/AdaptiveIPP)
@@ -481,13 +691,12 @@ class PathPlanner(Node):
             self.num_waypoints = self.ipp_model_config['num_waypoints']
 
             # Sample uniform random initial waypoints and compute initial paths
-            # Sample one less waypoint per robot and add the home position as the first waypoint
             X_init = get_inducing_pts(
                 self.X_objective,
                 (self.num_waypoints - 1),
                 seed=self.seed,
             )
-            self.get_logger().info("Running TSP solver to get the initial path...")
+            self.get_logger().info("Running TSP solver to get the initial IPP path...")
             X_init, _ = run_tsp(
                 X_init,
                 start_nodes=self.start_location,
@@ -573,7 +782,7 @@ class PathPlanner(Node):
         """
         Update the hyperparameters and waypoints if the buffer is full
         or if force_update is True and enough data points are available.
-        For Waypoint missions, this will only log data and plot paths.
+        For Waypoint and Coverage missions, this will only log data and plot paths.
         """
         if not self.data_X and not force_update and self.current_waypoint < len(
             self.waypoints
@@ -652,6 +861,8 @@ class PathPlanner(Node):
         current_waypoint_idx = (
             self.current_waypoint if self.current_waypoint > -1 else 0
         )
+        if self.mission_type == "Coverage" and self.coverage_phase == "coverage":
+            current_waypoint_idx += self.num_waypoints
         fname = f"waypoints_{current_waypoint_idx}-{strftime('%H-%M-%S', gmtime())}"
 
         # Always plot path; include data if available
@@ -683,6 +894,14 @@ class PathPlanner(Node):
 
         # Handle mission completion
         if self.current_waypoint >= len(self.waypoints):
+            # For Coverage initial phase, don't shutdown here; shutdown only after
+            # the coverage phase is done (handled in waypoint_service).
+            if self.mission_type == "Coverage" and self.coverage_phase == "initial":
+                self.get_logger().info(
+                    "Reached end of initial coverage path; waiting for phase transition."
+                )
+                return
+
             # Re-run method to get last batch of data, if any
             if not force_update and self.data_X:
                 self.update_with_data(force_update=True)
