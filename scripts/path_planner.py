@@ -192,6 +192,7 @@ class PathPlanner(Node):
         self.X_scaler.fit(self.X_objective)
         self.X_objective = self.X_scaler.transform(self.X_objective)
         self.X_objective = self.X_objective.astype(default_float())
+        self.fence_vertices_local = self.X_scaler.transform(self.fence_vertices)
 
         # Normalize start location
         self.start_location = self.X_scaler.transform(
@@ -519,6 +520,7 @@ class PathPlanner(Node):
             X_objective=self.X_objective,
             kernel=kernel,
             noise_variance=noise_variance,
+            pbounds=self.fence_vertices_local
         )
 
         self.get_logger().info(
