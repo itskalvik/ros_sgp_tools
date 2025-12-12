@@ -33,6 +33,8 @@ class PathFollower(Controller):
         super().__init__(navigation_type=0,
                          start_mission=False)
 
+        self._shutdown_requested: bool = False
+
         # Create the waypoint service client
         self.waypoint_service = WaypointServiceClient()
         self.mission()
@@ -63,13 +65,29 @@ class PathFollower(Controller):
         if self.arm(False):
             self.get_logger().info('Disarmed')
 
-        self.get_logger().info('Mission complete')
+        self.request_shutdown("Mission complete")
 
+    @property
+    def shutdown_requested(self) -> bool:
+        return self._shutdown_requested
+
+    def request_shutdown(self, reason: str = "") -> None:
+        if reason:
+            self.get_logger().info(f"Shutdown requested: {reason}")
+        self._shutdown_requested = True
 
 def main(args=None):
     rclpy.init(args=args)
     path_follower = PathFollower()
-    rclpy.spin_once(path_follower)
+
+    try:
+        while rclpy.ok() and not path_follower.shutdown_requested:
+            rclpy.spin_once(path_follower, timeout_sec=0.1)
+    except KeyboardInterrupt:
+        path_follower.get_logger().info('Keyboard interrupt, shutting down')
+    finally:
+        path_follower.destroy_node()
+        rclpy.shutdown()    
 
 if __name__ == '__main__':
     main()

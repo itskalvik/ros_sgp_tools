@@ -40,7 +40,3 @@ hyperparameters:
   kernel: # Kernel function kwargs
     variance: 0.01
     lengthscales: 1.0
-
-# Configuration for the TSP solver
-tsp:
-  time_limit: 20
