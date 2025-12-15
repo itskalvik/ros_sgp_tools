@@ -9,19 +9,39 @@ try:
 except ImportError:
     pass
 
-# Extract geofence and home location from QGC plan file
-def get_mission_plan(fname, get_waypoints=False):
+# Extract geofence, home location, and optionally waypoints from QGC plan file
+def get_mission_plan(fname):
     with open(fname, "r") as infile:
         data = json.load(infile)
-        vertices = np.array(data['geoFence']['polygons'][0]['polygon'])
-        home_position = data['mission']['plannedHomePosition']
-        if get_waypoints:
-            waypoints = []
-            for waypoint in data['mission']['items'][1]['TransectStyleComplexItem']['Items']:
-                if waypoint['command']==16:
-                    waypoints.append(waypoint['params'][4:7])
-            return vertices, home_position, np.array(waypoints)
-    return vertices, home_position
+
+    vertices = np.array(data["geoFence"]["polygons"][0]["polygon"])
+    home_position = data["mission"]["plannedHomePosition"]
+
+    # Try to extract waypoints if they exist; otherwise return None for waypoints.
+    waypoints = None
+    try:
+        items = data.get("mission", {}).get("items", [])
+        for item in items:
+            tsc = item.get("TransectStyleComplexItem")
+            if not tsc:
+                continue
+
+            wp_list = []
+            for wp in tsc.get("Items", []):
+                if wp.get("command") == 16:
+                    params = wp.get("params", [])
+                    # QGC-style: params[4:7] are typically [lat, lon, alt]
+                    if len(params) >= 7:
+                        wp_list.append(params[4:7])
+
+            if wp_list:
+                waypoints = np.array(wp_list)[:, :2]
+                break
+    except (AttributeError, TypeError, KeyError):
+        waypoints = None
+
+    return vertices, home_position, waypoints
+
 
 def point_cloud(points, parent_frame):
     """ Creates a point cloud message.

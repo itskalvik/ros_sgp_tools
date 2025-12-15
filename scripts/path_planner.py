@@ -168,16 +168,10 @@ class PathPlanner(Node):
     def _init_objective_and_scaler(self) -> None:
         """Set up objective point cloud, mission type, and coordinate scaler."""
         # Get mission plan (fence and start location) and optional waypoints
-        if self.mission_type == 'Waypoint':
-            self.fence_vertices, self.start_location, waypoints = get_mission_plan(
-                self.plan_fname, get_waypoints=True
-            )
-            self.waypoints = waypoints[:, :2]
-        else:
-            self.fence_vertices, self.start_location = get_mission_plan(
-                self.plan_fname, get_waypoints=False
-            )
-            self.waypoints = None  # will be set by IPP/Coverage model if needed
+        self.fence_vertices, self.start_location, waypoints = get_mission_plan(
+            self.plan_fname
+        )
+        self.waypoints = waypoints
 
         ipp_cfg = self.config.get('ipp_model', {})
         num_samples = ipp_cfg.get('num_samples', 1000)
