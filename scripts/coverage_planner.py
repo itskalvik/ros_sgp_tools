@@ -95,7 +95,7 @@ class CoveragePathPlanner(BasePathPlanner):
         if var_ratio is not None:
             var_threshold = max_prior_var * float(var_ratio)
             optimizer_kwargs["var_threshold"] = var_threshold
-            self.get_logger().info(f"Using var_threshold={var_threshold:.4f}")
+            self.get_logger().info(f"Using var_threshold: {var_threshold:.4f}; computed from variance_ratio: {var_ratio:.4f}")
 
         coverage_model_cls = get_method(method_name)
         self.coverage_model = coverage_model_cls(

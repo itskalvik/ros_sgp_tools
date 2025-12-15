@@ -2,7 +2,7 @@
 robot:
   sensor: GazeboPing1D
   data_buffer_size: 200
-  mission_type: AdaptiveIPP # Available Options: AdaptiveIPP, IPP, Waypoint
+  mission_type: Coverage # Available Options: Coverage, AdaptiveIPP, IPP, Waypoint
   seed: 1234
 
 # Configuration for sensor(s)
@@ -13,30 +13,15 @@ sensor:
 
 # Configuration for the informative path planning model
 ipp_model:
-  num_waypoints: 40
-  method: ContinuousSGP # Method class from sgptools.methods
+  num_waypoints: 10
+  method: GreedyCoverage # Method class from sgptools.methods
+  variance_ratio: 0.9
   optimizer: # kwargs for method.optimize()
-    max_steps: 200
-  transform: # Transform object kwargs
-    sampling_rate: 2
-    # Budget in meters
-    distance_budget:
-    # constraint_weight is ignored for empty distance budgets
-    constraint_weight: 5000.0 
-    aggregate_fov: False
-
-# Configuration for the parameter model
-param_model:
-  method: SSGP # Available Options: SSGP
-  num_inducing: 40
-  train_inducing: True
-  optimizer: # kwargs for sgptools.utils.gpflow.optimize_model method
-    max_steps: 200
+    target_fraction: 90
 
 # Configuration for the hyperparameters (initial values) used in the ipp and param models
 hyperparameters:
   noise_variance: 0.01
-  kernel_function: RBF
+  kernel_function: Attentive
   kernel: # Kernel function kwargs
-    variance: 0.01
-    lengthscales: 1.0
+    lengthscales: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
