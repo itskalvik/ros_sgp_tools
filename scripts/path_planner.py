@@ -467,7 +467,8 @@ class PathPlanner(Node):
 
         # Scale X_train into GP space
         X_train_scaled = self.X_scaler.transform(X_train).astype(default_float())
-        y_train = y_train.astype(default_float())
+        y_train_scaled = (y_train - np.mean(y_train, axis=0)) / (np.std(y_train, axis=0) + 1e-6)
+        y_train_scaled = y_train_scaled.astype(default_float())
 
         # Build base kernel from config hyperparameters
         hyper_cfg = self.config['hyperparameters']
@@ -482,7 +483,7 @@ class PathPlanner(Node):
         # Fit kernel + noise variance (like benchmark get_model_params)
         _, noise_variance, kernel, init_model = get_model_params(
             X_train=X_train_scaled,
-            y_train=y_train,
+            y_train=y_train_scaled,
             kernel=base_kernel,
             return_model=True,
             verbose=False,
@@ -804,8 +805,8 @@ class PathPlanner(Node):
 
         # Make local copies of the data and clear the data buffers
         with self.data_lock:
-            data_X = np.array(self.data_X, dtype=default_float()).reshape(-1, 2)
-            data_y = np.array(self.data_y, dtype=default_float()).reshape(-1, 1)
+            data_X = np.array(self.data_X).reshape(-1, 2)
+            data_y = np.array(self.data_y).reshape(-1, 1)
             self.data_X = []
             self.data_y = []
 
