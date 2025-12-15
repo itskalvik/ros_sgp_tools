@@ -34,13 +34,23 @@ def generate_launch_description():
     with open(config_file, 'r') as file:
         config = yaml.safe_load(file)
     sensor = config['robot']['sensor']
+    mission_type = config['robot']['mission_type']
     data_folder = get_var('DATA_FOLDER', '')
     fcu_url = get_var('FCU_URL', 'udp://0.0.0.0:14550@')
 
     nodes = []
     # Path Planner
+    if mission_type=='Waypoint':
+        executable = 'waypoint_planner.py'
+    elif mission_type=='IPP':
+        executable = 'ipp_planner.py'
+    elif mission_type=='AdaptiveIPP':
+        executable = 'adaptive_ipp_planner.py'
+    elif mission_type=='Coverage':
+        executable = 'coverage_planner.py'
+
     path_planner = Node(package='ros_sgp_tools',
-                        executable='path_planner.py',
+                        executable=executable,
                         parameters=[
                             {'geofence_plan': geofence_plan,
                              'config_file': config_file,

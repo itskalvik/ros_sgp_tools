@@ -34,7 +34,10 @@ endif()
 
 # Install Python executables
 install(PROGRAMS
-  scripts/path_planner.py
+  scripts/waypoint_planner.py
+  scripts/ipp_planner.py
+  scripts/adaptive_ipp_planner.py
+  scripts/coverage_planner.py
   scripts/path_follower.py
   scripts/data_visualizer.py
   DESTINATION lib/${PROJECT_NAME}

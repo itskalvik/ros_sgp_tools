@@ -15,11 +15,10 @@ class WaypointServiceClient(Node):
             rclpy.spin_once(self, timeout_sec=1.0)
         self.request = Waypoint.Request()
 
-    def get_waypoint(self, ok=True, timeout_sec=30):
+    def get_waypoint(self, ok=True):
         self.request.ok = ok
         future = self.client.call_async(self.request)
-        rclpy.spin_until_future_complete(self, future, 
-                                         timeout_sec=timeout_sec)
+        rclpy.spin_until_future_complete(self, future)
         result = future.result()
         if result.new_waypoint:
             return [result.waypoint.x, result.waypoint.y]
