@@ -498,21 +498,16 @@ class PathPlanner(Node):
         coverage_cfg = self.config.get('ipp_model', {})
         method_name = coverage_cfg.get('method', 'HexCoverage')
         num_sensing = len(self.X_objective)
+        optimizer_kwargs = coverage_cfg.get('optimizer', {})
 
-        # var_threshold: either explicit, or variance_ratio * max_prior_var
-        var_threshold = coverage_cfg.get('var_threshold')
-        if var_threshold is None:
-            var_ratio = coverage_cfg.get('variance_ratio', 0.5)
+        var_ratio = coverage_cfg.get('variance_ratio')
+        if var_ratio is not None:
             var_threshold = max_prior_var * float(var_ratio)
             self.get_logger().info(
-                f"Coverage var_threshold not provided; using "
-                f"max_prior_var * variance_ratio = {max_prior_var:.4f} * {var_ratio:.2f} "
-                f"= {var_threshold:.4f}"
+                f"Using var_threshold = max_prior_var * variance_ratio"
+                f" = {max_prior_var:.4f} * {var_ratio:.2f} = {var_threshold:.4f}"
             )
-        else:
-            self.get_logger().info(f"Using explicit coverage var_threshold={var_threshold}")
-
-        optimizer_kwargs = coverage_cfg.get('optimizer', {})
+            optimizer_kwargs["var_threshold"] = var_threshold
 
         # Instantiate coverage planner (similar to benchmark's cmodel)
         coverage_model_cls = get_method(method_name)
@@ -528,7 +523,6 @@ class PathPlanner(Node):
             f"Running coverage planner optimize() with method={method_name}..."
         )
         X_sol, fovs = self.coverage_model.optimize(
-            var_threshold=var_threshold,
             return_fovs=True,
             start_nodes=self.start_location,
             **optimizer_kwargs,
@@ -592,15 +586,7 @@ class PathPlanner(Node):
                 self.get_logger().info(
                     "Initial coverage path complete; fitting kernel and planning coverage path..."
                 )
-                try:
-                    self.plan_coverage_from_data()
-                except Exception as e:
-                    self.get_logger().error(
-                        f"Coverage planning failed with error: {e}\n{traceback.format_exc()}"
-                    )
-                    self.request_shutdown("Coverage planning failed")
-                    response.new_waypoint = False
-                    return response
+                self.plan_coverage_from_data()
 
                 # Switch to coverage phase and start at first coverage waypoint
                 self.coverage_phase = "coverage"
