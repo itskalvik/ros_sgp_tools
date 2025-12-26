@@ -14,7 +14,7 @@ sensor:
 # Configuration for the informative path planning model
 ipp_model:
   num_waypoints: 10
-  method: GreedyCoverage # Method class from sgptools.methods
+  method: GreedyCover # Method class from sgptools.methods
   variance_ratio: 0.9
   optimizer: # kwargs for method.optimize()
     target_fraction: 90
