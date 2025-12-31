@@ -54,13 +54,33 @@ class CoveragePathPlanner(BasePathPlanner):
         if self.coverage_planned:
             return
 
-        if len(self.all_X) == 0:
+        if len(self.data_X) == 0:
             raise RuntimeError(
                 "No data collected for coverage kernel fitting."
             )
         else:
-            X_train = np.array(self.all_X).reshape(-1, 2)
-            y_train = np.array(self.all_y).reshape(-1, 1)
+            X_train = np.array(self.data_X).reshape(-1, 2)
+            y_train = np.array(self.data_y).reshape(-1, 1)
+            self.data_X = []
+            self.data_y = []
+
+        fname = f"waypoints_{self.current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
+        X_data_plot = self.X_scaler.transform(X_train) if X_train.size > 0 else None
+        self.plot_paths(fname, self.waypoints, X_data=X_data_plot, update_waypoint=0)
+
+        # Store copy of init data in hdf5
+        self.data_file.create_dataset(
+            "X_init",
+            X_train.shape,
+            dtype=np.float64,
+            data=X_train,
+        )
+        self.data_file.create_dataset(
+            "y_init",
+            y_train.shape,
+            dtype=np.float64,
+            data=y_train,
+        )
 
         X_train_scaled = self.X_scaler.transform(X_train)
         y_train_scaled = (y_train - np.mean(y_train, axis=0)) / (np.std(y_train, axis=0) + 1e-6)
@@ -77,6 +97,7 @@ class CoveragePathPlanner(BasePathPlanner):
         _, noise_variance, kernel, init_model = get_model_params(
             X_train=X_train_scaled.astype(default_float()),
             y_train=y_train_scaled.astype(default_float()),
+            optimizer='tf.Adam',
             kernel=base_kernel,
             return_model=True,
             verbose=False,
@@ -109,7 +130,7 @@ class CoveragePathPlanner(BasePathPlanner):
         self.get_logger().info(f"Running coverage planner optimize() with method={method_name}...")
         X_sol, fovs = self.coverage_model.optimize(
             return_fovs=True,
-            start_nodes=self.start_location,
+            start_nodes=self.waypoints[None, -1],
             **optimizer_kwargs,
         )
         X_sol = np.array(X_sol)[0]
@@ -119,11 +140,17 @@ class CoveragePathPlanner(BasePathPlanner):
         self.coverage_waypoints = X_sol
         self.coverage_planned = True
 
-        self.plot_paths(
-            f"coverage_solution-{strftime('%H-%M-%S', gmtime())}",
-            self.coverage_waypoints,
-            update_waypoint=-1,
+        fname = f"coverage_path-{strftime('%H-%M-%S', gmtime())}"
+        self.data_file.create_dataset(
+            fname,
+            self.coverage_waypoints.shape,
+            dtype=np.float64,
+            data=self.X_scaler.inverse_transform(self.coverage_waypoints),
         )
+        self.plot_paths(
+            fname,
+            self.coverage_waypoints,
+            update_waypoint=0)
         self.get_logger().info(f"Coverage planner produced {len(self.coverage_waypoints)} waypoints.")
 
     def waypoint_service_callback(self, request, response):

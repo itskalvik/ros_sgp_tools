@@ -210,14 +210,16 @@ class BasePathPlanner(Node):
             data=self.fence_vertices,
         )
 
-        fname = f"waypoints_{-1}-{strftime('%H-%M-%S', gmtime())}"
+        fname = f"initial_path-{strftime('%H-%M-%S', gmtime())}"
         self.data_file.create_dataset(
             fname,
             self.waypoints.shape,
             dtype=np.float64,
             data=self.X_scaler.inverse_transform(self.waypoints),
         )
-        self.plot_paths(fname, self.waypoints, update_waypoint=0)
+        self.plot_paths(fname, 
+                        self.waypoints, 
+                        update_waypoint=0)
 
     def _init_distances_and_state(self) -> None:
         lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
@@ -225,10 +227,6 @@ class BasePathPlanner(Node):
 
         self.data_X: List[np.ndarray] = []
         self.data_y: List[np.ndarray] = []
-
-        # Used by Coverage (harmless for others)
-        self.all_X: List[np.ndarray] = []
-        self.all_y: List[np.ndarray] = []
 
         self.current_waypoint: int = -1
         self.data_lock = Lock()
@@ -349,9 +347,6 @@ class BasePathPlanner(Node):
             with self.data_lock:
                 self.data_X.extend(data_X)
                 self.data_y.extend(data_y)
-                if self.mission_type == "Coverage":
-                    self.all_X.extend(data_X)
-                    self.all_y.extend(data_y)
 
     # -------------------------------------------------------------------------
     # IPP/AdaptiveIPP reusable bits
@@ -437,7 +432,7 @@ class BasePathPlanner(Node):
         self.get_logger().info(f"Data Mean: {self.stats.mean}")
         self.get_logger().info(f"Data Std: {self.stats.std}")
 
-        if self.num_waypoints is not None and self.current_waypoint >= (self.num_waypoints - 1):
+        if self.current_waypoint >= (self.num_waypoints - 1):
             self.get_logger().info("Current waypoint is last target; skipping parameter update.")
             return
 
@@ -506,12 +501,16 @@ class BasePathPlanner(Node):
             return
 
         enough_buffer = len(self.data_X) > self.data_buffer_size
-        enough_forced = force_update and hasattr(self, "num_param_inducing") and len(self.data_X) > getattr(
-            self, "num_param_inducing", 0
-        )
+        enough_forced = force_update and \
+                        hasattr(self, "num_param_inducing") and \
+                        len(self.data_X) > getattr(self, "num_param_inducing", 0)
         mission_complete = self.current_waypoint >= len(self.waypoints)
 
         if not (enough_buffer or enough_forced or mission_complete):
+            return
+        
+        # Skip processing data in the initial phase of coverage missions
+        if getattr(self, "mission_type", "") == "Coverage" and getattr(self, "coverage_phase", "") == "initial":
             return
 
         with self.data_lock:
@@ -550,9 +549,7 @@ class BasePathPlanner(Node):
 
         current_waypoint_idx = self.current_waypoint if self.current_waypoint > -1 else 0
         if getattr(self, "mission_type", "") == "Coverage" and getattr(self, "coverage_phase", "") == "coverage":
-            # Keep your original indexing offset behavior if desired
-            if hasattr(self, "num_waypoints") and self.num_waypoints is not None:
-                current_waypoint_idx += int(self.num_waypoints)
+            current_waypoint_idx += int(self.num_waypoints)
 
         fname = f"waypoints_{current_waypoint_idx}-{strftime('%H-%M-%S', gmtime())}"
         X_data_plot = self.X_scaler.transform(data_X) if data_X.size > 0 else None
@@ -560,10 +557,6 @@ class BasePathPlanner(Node):
         self.plot_paths(fname, self.waypoints, X_data=X_data_plot, update_waypoint=update_waypoint)
 
         if self.current_waypoint >= len(self.waypoints):
-            if not self._should_request_shutdown_on_completion():
-                self.get_logger().info("Mission phase complete; not shutting down (subclass override).")
-                return
-
             if not force_update and self.data_X:
                 self.update_with_data(force_update=True)
 
