@@ -423,8 +423,13 @@ class BasePathPlanner(Node):
         return None, -1
 
     def update_param(self, X_new: np.ndarray, y_new: np.ndarray) -> None:
-        self.get_logger().info("Updating SSGP parameters...")
 
+        if not (hasattr(self, "num_param_inducing") and \
+                len(X_new) > getattr(self, "num_param_inducing", 0)):
+            self.get_logger().info("Skipping parameter update, num data samples less than num inducing points...")
+            return False
+        
+        self.get_logger().info("Updating parameter model...")
         X_new = self.X_scaler.transform(X_new).astype(default_float())
 
         eps = 1e-6
@@ -434,7 +439,7 @@ class BasePathPlanner(Node):
 
         if self.current_waypoint >= (self.num_waypoints - 1):
             self.get_logger().info("Current waypoint is last target; skipping parameter update.")
-            return
+            return False
 
         inducing_variable = np.copy(self.waypoints[: self.current_waypoint + 1])
         inducing_variable[-1] = X_new[-1]
@@ -460,6 +465,8 @@ class BasePathPlanner(Node):
                 kernel=kernel,
                 noise_variance=noise_variance,
             )
+
+        return True
 
     def update_waypoints(self) -> Tuple[np.ndarray, int]:
         self.get_logger().info("Updating IPP solution...")
@@ -501,12 +508,9 @@ class BasePathPlanner(Node):
             return
 
         enough_buffer = len(self.data_X) > self.data_buffer_size
-        enough_forced = force_update and \
-                        hasattr(self, "num_param_inducing") and \
-                        len(self.data_X) > getattr(self, "num_param_inducing", 0)
         mission_complete = self.current_waypoint >= len(self.waypoints)
 
-        if not (enough_buffer or enough_forced or mission_complete):
+        if not (enough_buffer or mission_complete or force_update):
             return
         
         # Skip processing data in the initial phase of coverage missions

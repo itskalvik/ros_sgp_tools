@@ -34,10 +34,11 @@ class AdaptiveIPPPathPlanner(BasePathPlanner):
     def _update_models_and_waypoints(self, data_X, data_y):
         # Same behavior as your original: update param model, then update IPP waypoints
         start_time = self.get_clock().now().nanoseconds
-        self.update_param(data_X, data_y)
+        finished = self.update_param(data_X, data_y)
         mid_time = self.get_clock().now().nanoseconds
 
-        new_waypoints, update_waypoint = self.update_waypoints()
+        if finished:
+            new_waypoints, update_waypoint = self.update_waypoints()
         end_time = self.get_clock().now().nanoseconds
 
         param_runtime = (mid_time - start_time) / 1e9

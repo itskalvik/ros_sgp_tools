@@ -151,7 +151,7 @@ class CoveragePathPlanner(BasePathPlanner):
             fname,
             self.coverage_waypoints,
             update_waypoint=0)
-        self.get_logger().info(f"Coverage planner produced {len(self.coverage_waypoints)} waypoints.")
+        self.get_logger().info(f"Coverage planner produced {len(self.coverage_waypoints)-1} waypoints.")
 
     def waypoint_service_callback(self, request, response):
         # Phase-aware waypoint service (same behavior as your original)
