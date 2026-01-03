@@ -13,11 +13,11 @@ sensor:
 
 # Configuration for the informative path planning model
 ipp_model:
-  num_waypoints: 10
+  num_waypoints: 10 # Initial waypoints
   method: GreedyCover # Method class from sgptools.methods
-  variance_ratio: 0.9
+  variance_ratio: 0.5
   optimizer: # kwargs for method.optimize()
-    target_fraction: 90
+    target_fraction: 100
 
 # Configuration for the hyperparameters (initial values) used in the ipp and param models
 hyperparameters:
