@@ -87,11 +87,18 @@ def point_cloud(points, parent_frame):
     )
 
 class LatLonStandardScaler(StandardScaler):
-    def fit(self, X, y=None, sample_weight=None):
+    def fit(self, X, y=None, sample_weight=None, origin=None):
         # Map lat long to UTM points before normalization
         X = utm.from_latlon(X[:, 0], X[:, 1])
         self.encoding = X[2:]
         X = np.vstack([X[0], X[1]]).T
+
+        # Center UTM coords to origin location (used for DVL navigation)
+        self.origin = origin
+        if origin is not None:
+            origin = utm.from_latlon(origin[0], origin[1])
+            origin = origin[:2]
+            X -= origin
 
         # Fit normalization params
         super().fit(X, y=y, sample_weight=sample_weight)
@@ -108,9 +115,10 @@ class LatLonStandardScaler(StandardScaler):
         self.distance_scale = np.linalg.norm(X1-X2, axis=-1)
 
     def transform(self, X, copy=None):
-        # Map lat long to UTM points before normalization
-        X = utm.from_latlon(X[:, 0], X[:, 1])
-        X = np.vstack([X[0], X[1]]).T
+        if self.origin is None:
+            # Map lat long to UTM points before normalization
+            X = utm.from_latlon(X[:, 0], X[:, 1])
+            X = np.vstack([X[0], X[1]]).T
         return super().transform(X, copy=copy)
     
     def fit_transform(self, X, y=None, **fit_params):
@@ -120,10 +128,11 @@ class LatLonStandardScaler(StandardScaler):
     def inverse_transform(self, X, copy=None):
         X = super().inverse_transform(X, copy=copy)
 
-        # Map UTM to lat long points after de-normalization
-        X = utm.to_latlon(X[:, 0], X[:, 1], 
-                          self.encoding[0], self.encoding[1])
-        X = np.vstack([X[0], X[1]]).T
+        if self.origin is None:
+            # Map UTM to lat long points after de-normalization
+            X = utm.to_latlon(X[:, 0], X[:, 1], 
+                            self.encoding[0], self.encoding[1])
+            X = np.vstack([X[0], X[1]]).T
         return X
 
     def meters2units(self, distance):
