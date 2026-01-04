@@ -1,5 +1,6 @@
 # Configuration for the robot
 robot:
+  navigation: GPS
   sensor: GazeboPing1D
   data_buffer_size: 200
   mission_type: Coverage # Available Options: Coverage, AdaptiveIPP, IPP, Waypoint

@@ -170,7 +170,15 @@ class BasePathPlanner(Node):
         self.X_objective = np.array(self.X_objective).reshape(-1, 2)
 
         self.X_scaler = LatLonStandardScaler()
-        self.X_scaler.fit(self.X_objective)
+
+        # Set origin when using DVL to use local/relative coords
+        robot_cfg = self.config.get("robot", {})
+        sensor_name = robot_cfg.get("navigation", "GPS")
+        if sensor_name == "DVL":
+            origin = self.start_location
+        else:
+            origin = None
+        self.X_scaler.fit(self.X_objective, origin=origin)
 
         self.X_objective = self.X_scaler.transform(self.X_objective).astype(default_float())
         self.fence_vertices_local = self.X_scaler.transform(self.fence_vertices)
@@ -245,11 +253,13 @@ class BasePathPlanner(Node):
         sensor_subscribers = []
         sensor_group = ReentrantCallbackGroup()
 
-        gps_obj = getattr(sensors_module, "GPS")()
-        self.sensors.append(gps_obj)
-        sensor_subscribers.append(gps_obj.get_subscriber(self, callback_group=sensor_group))
-
         robot_cfg = self.config.get("robot", {})
+
+        sensor_name = robot_cfg.get("navigation", "GPS")
+        pos_obj = getattr(sensors_module, sensor_name)()
+        self.sensors.append(pos_obj)
+        sensor_subscribers.append(pos_obj.get_subscriber(self, callback_group=sensor_group))
+
         sensor_name = robot_cfg.get("sensor", "Altitude")
         if sensor_name != "Altitude":
             sensor_obj = getattr(sensors_module, sensor_name)()
