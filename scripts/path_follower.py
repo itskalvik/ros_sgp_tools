@@ -4,6 +4,7 @@ import argparse
 import importlib
 
 import rclpy
+from rclpy.node import Node
 from ros_sgp_tools.srv import Waypoint
 
 
