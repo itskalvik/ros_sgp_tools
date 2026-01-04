@@ -69,11 +69,7 @@ def build_path_follower_node(controller_name: str):
         def __init__(self):
             # Match each original controller's constructor arguments
             if controller_name == "aqua2":
-                super().__init__(
-                    default_depth=0.5,
-                    default_speed=0.5,
-                    acceptance_radius=1.1,
-                )
+                super().__init__()
             else:  # mavros
                 super().__init__(
                     navigation_type=0,
