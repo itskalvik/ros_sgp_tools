@@ -95,10 +95,10 @@ class LatLonStandardScaler(StandardScaler):
 
         # Center UTM coords to origin location (used for DVL navigation)
         self.origin = origin
-        if origin is not None:
-            origin = utm.from_latlon(origin[0], origin[1])
-            origin = origin[:2]
-            X -= origin
+        if self.origin is not None:
+            self.origin = utm.from_latlon(self.origin[0], self.origin[1])
+            self.origin = self.origin[:2]
+            X -= self.origin
 
         # Fit normalization params
         super().fit(X, y=y, sample_weight=sample_weight)
@@ -114,11 +114,15 @@ class LatLonStandardScaler(StandardScaler):
         X2 = super().transform([np.copy(X[0]) + [1.0, 0.0]])
         self.distance_scale = np.linalg.norm(X1-X2, axis=-1)
 
-    def transform(self, X, copy=None):
-        if self.origin is None:
+    def transform(self, X, copy=None, force_origin=False):
+        if self.origin is None or force_origin:
             # Map lat long to UTM points before normalization
             X = utm.from_latlon(X[:, 0], X[:, 1])
             X = np.vstack([X[0], X[1]]).T
+
+            if self.origin is not None:
+                X -= self.origin
+
         return super().transform(X, copy=copy)
     
     def fit_transform(self, X, y=None, **fit_params):

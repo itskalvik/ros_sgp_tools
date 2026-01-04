@@ -176,19 +176,25 @@ class BasePathPlanner(Node):
         sensor_name = robot_cfg.get("navigation", "GPS")
         if sensor_name == "DVL":
             origin = self.start_location
+            force_origin = True
         else:
             origin = None
+            force_origin = False
         self.X_scaler.fit(self.X_objective, origin=origin)
 
-        self.X_objective = self.X_scaler.transform(self.X_objective).astype(default_float())
-        self.fence_vertices_local = self.X_scaler.transform(self.fence_vertices)
+        self.X_objective = self.X_scaler.transform(self.X_objective,
+                                                   force_origin=force_origin).astype(default_float())
+        self.fence_vertices_local = self.X_scaler.transform(self.fence_vertices,
+                                                            force_origin=force_origin)
 
-        self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]])).astype(
+        self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]),
+                                                      force_origin=force_origin).astype(
             default_float()
         )
 
         if self.mission_type == "Waypoint" and self.waypoints is not None:
-            self.waypoints = self.X_scaler.transform(self.waypoints).astype(default_float())
+            self.waypoints = self.X_scaler.transform(self.waypoints, 
+                                                     force_origin=force_origin).astype(default_float())
 
     def _init_mission_models_and_waypoints(self) -> None:
         raise NotImplementedError("Subclasses must implement _init_mission_models_and_waypoints()")
