@@ -63,6 +63,7 @@ def generate_launch_description():
     path_follower = Node(package='ros_sgp_tools',
                          executable='path_follower.py',
                          parameters=[{'xy_tolerance': 0.7}],
+                         arguments=['--controller', 'mavros'],
                          output='screen')
     nodes.append(path_follower)
 

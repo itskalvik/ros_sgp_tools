@@ -64,6 +64,7 @@ def generate_launch_description():
                          parameters=[{'depth': 0.5,
                                       'speed': 0.5,
                                       'acceptance_radius': 1.5}],
+                         arguments=['--controller', 'aqua2'],
                          output='screen')
     nodes.append(path_follower)
 

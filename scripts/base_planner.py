@@ -279,7 +279,7 @@ class BasePathPlanner(Node):
 
         self.create_subscription(
             Float32MultiArray,
-            "mavros/waypoint_eta",
+            "waypoint_eta",
             self.eta_callback,
             qos_profile_sensor_data,
         )
