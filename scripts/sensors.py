@@ -1,8 +1,5 @@
-from sensor_msgs.msg import NavSatFix, Range, FluidPressure, Image, LaserScan
 from rclpy.qos import qos_profile_sensor_data, QoSProfile
-from bluerobotics_sonar_msgs.msg import SonarPing1D
 from message_filters import Subscriber
-from cv_bridge import CvBridge
 import numpy as np
 
 
@@ -18,6 +15,7 @@ class SensorCallback:
 
 class GPS(SensorCallback):
     def get_subscriber(self, node_obj, callback_group=None):
+        from sensor_msgs.msg import NavSatFix
         sub =  Subscriber(node_obj, NavSatFix, 
                           "mavros/global_position/global",
                           qos_profile=qos_profile_sensor_data,
@@ -26,12 +24,45 @@ class GPS(SensorCallback):
     
     def process_msg(self, msg):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
+    
+class DVL(SensorCallback):
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/dvl/position_estimate"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        from geometry_msgs.msg import PoseWithCovarianceStamped
+        sub =  Subscriber(node_obj, PoseWithCovarianceStamped,
+                          self.topic,
+                          qos_profile=qos_profile_sensor_data,
+                          callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg):
+        return np.array([msg.pose.pose.position.x,
+                         msg.pose.pose.position.y,
+                         msg.pose.pose.position.z])
+
+class DVLHeight(SensorCallback):
+    def __init__(self, namespace='aqua'):
+        self.topic = f"/{namespace}/altitude"
+
+    def get_subscriber(self, node_obj, callback_group=None):
+        from std_msgs.msg import Float32
+        sub = Subscriber(node_obj, Float32, 
+                         self.topic,
+                         qos_profile=qos_profile_sensor_data,
+                         callback_group=callback_group)
+        return sub
+    
+    def process_msg(self, msg, position):
+        return [position[:2]], [msg.data]
 
 class SerialPing1D(SensorCallback):
     def __init__(self):
         self.topic = "mavros/rangefinder_pub"
 
     def get_subscriber(self, node_obj, callback_group=None):
+        from sensor_msgs.msg import Range
         sub = Subscriber(node_obj, Range, 
                          self.topic,
                          qos_profile=qos_profile_sensor_data,
@@ -46,6 +77,7 @@ class GazeboPing1D(SensorCallback):
         self.topic = "ping1d"
 
     def get_subscriber(self, node_obj, callback_group=None):
+        from sensor_msgs.msg import LaserScan
         sub = Subscriber(node_obj, LaserScan, 
                          self.topic,
                          qos_profile=qos_profile_sensor_data,
@@ -60,6 +92,7 @@ class Ping1D(SensorCallback):
         self.topic = "sonar/ping1d/data"
 
     def get_subscriber(self, node_obj, callback_group=None):
+        from bluerobotics_sonar_msgs.msg import SonarPing1D
         sub = Subscriber(node_obj, SonarPing1D, 
                          self.topic,
                          qos_profile=qos_profile_sensor_data,
@@ -74,6 +107,7 @@ class Pressure(SensorCallback):
         self.data_mean = None
 
     def get_subscriber(self, node_obj):
+        from sensor_msgs.msg import FluidPressure
         sub =  Subscriber(node_obj, FluidPressure, 
                           "mavros/imu/static_pressure",
                           qos_profile=qos_profile_sensor_data)
@@ -84,9 +118,11 @@ class Pressure(SensorCallback):
             self.data_mean = msg.fluid_pressure
         return [position[:2]], [msg.fluid_pressure-self.data_mean]
 
+
 class ZED(SensorCallback):
     def __init__(self):
         # Setup variables to get data from depth map
+        from cv_bridge import CvBridge
         self.bridge = CvBridge()
 
         # Get data from 3x3 grid
@@ -109,6 +145,7 @@ class ZED(SensorCallback):
         self.dist_scale = 1/111111 # 1 meter offset distance in lat/long
 
     def get_subscriber(self, node_obj):
+        from sensor_msgs.msg import Image
         sub =  Subscriber(node_obj, Image, 
                           "zed/zed_node/depth/depth_registered",
                           qos_profile=QoSProfile(depth=10))
