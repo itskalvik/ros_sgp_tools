@@ -109,9 +109,10 @@ def build_path_follower_node(controller_name: str):
                 if self.go2waypoint([waypoint[0], waypoint[1]]):
                     self.get_logger().info("Reached waypoint")
 
-            self.get_logger().info("Disarming")
-            if self.arm(False):
-                self.get_logger().info("Disarmed")
+            if controller_name == "mavros":
+                self.get_logger().info("Disarming")
+                if self.arm(False):
+                    self.get_logger().info("Disarmed")
 
             self.request_shutdown("Mission complete")
 
