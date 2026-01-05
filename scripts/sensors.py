@@ -26,7 +26,7 @@ class GPS(SensorCallback):
         return np.array([msg.latitude, msg.longitude, msg.altitude])
     
 class DVL(SensorCallback):
-    def __init__(self, namespace='aqua'):
+    def __init__(self, namespace='a14'):
         self.topic = f"/{namespace}/dvl/position_estimate"
 
     def get_subscriber(self, node_obj, callback_group=None):
@@ -43,8 +43,8 @@ class DVL(SensorCallback):
                          msg.pose.pose.position.z])
 
 class DVLHeight(SensorCallback):
-    def __init__(self, namespace='aqua'):
-        self.topic = f"/{namespace}/altitude"
+    def __init__(self, namespace='a14'):
+        self.topic = f"/{namespace}/dvl/altitude"
 
     def get_subscriber(self, node_obj, callback_group=None):
         from std_msgs.msg import Float32
