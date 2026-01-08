@@ -6,6 +6,9 @@ from rclpy.executors import MultiThreadedExecutor
 
 from geometry_msgs.msg import Point
 
+import os
+import pickle
+import gpflow
 from gpflow.config import default_float
 
 from sgptools.methods import get_method
@@ -152,6 +155,16 @@ class CoveragePathPlanner(BasePathPlanner):
             self.coverage_waypoints,
             update_waypoint=0)
         self.get_logger().info(f"Coverage planner produced {len(self.coverage_waypoints)-1} waypoints.")
+
+        # Save learned GP model
+        fname = os.path.join(self.data_folder, f"model_params.pkl")
+        params_kernel = gpflow.utilities.parameter_dict(init_model.kernel)
+        params_likelihood = gpflow.utilities.parameter_dict(init_model.likelihood)
+        params = {'kernel': params_kernel, 
+                  'likelihood': params_likelihood}
+        with open(fname, 'wb') as handle:
+            pickle.dump(params, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        self.get_logger().info(f"Saved GP model hyperparameters.")
 
     def waypoint_service_callback(self, request, response):
         # Phase-aware waypoint service (same behavior as your original)
