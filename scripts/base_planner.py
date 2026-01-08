@@ -224,6 +224,13 @@ class BasePathPlanner(Node):
             data=self.fence_vertices,
         )
 
+        self.data_file.create_dataset(
+            "X_objective",
+            self.X_objective.shape,
+            dtype=np.float64,
+            data=self.X_objective,
+        )
+
         fname = f"initial_path-{strftime('%H-%M-%S', gmtime())}"
         self.data_file.create_dataset(
             fname,
