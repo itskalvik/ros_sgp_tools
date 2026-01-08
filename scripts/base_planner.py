@@ -228,7 +228,7 @@ class BasePathPlanner(Node):
             "X_objective",
             self.X_objective.shape,
             dtype=np.float64,
-            data=self.X_objective,
+            data=self.X_scaler.inverse_transform(self.X_objective),
         )
 
         fname = f"initial_path-{strftime('%H-%M-%S', gmtime())}"
