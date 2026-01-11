@@ -133,6 +133,7 @@ class CoveragePathPlanner(BasePathPlanner):
         self.get_logger().info(f"Running coverage planner optimize() with method={method_name}...")
         X_sol, fovs = self.coverage_model.optimize(
             return_fovs=True,
+            X_warm_start=X_train_scaled.astype(default_float()),
             start_nodes=self.waypoints[None, -1],
             **optimizer_kwargs,
         )
