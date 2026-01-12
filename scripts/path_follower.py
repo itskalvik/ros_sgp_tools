@@ -3,7 +3,7 @@ import os
 import sys
 import argparse
 import importlib
-from typing import List, Tuple
+from typing import List
 
 import rclpy
 from rclpy.node import Node
@@ -12,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 from ros_sgp_tools.srv import Waypoint
 
 import shapely
+from shapely.ops import nearest_points
 from shapely.geometry import Polygon, Point as ShapelyPoint
 from extremitypathfinder.extremitypathfinder import PolygonEnvironment
 
@@ -168,12 +169,17 @@ def build_path_follower_node(controller_name: str):
             )[0]
 
             # Ensure points are inside the (scaled) fence
-            if not self.fence.covers(ShapelyPoint(float(start_scaled[0]), float(start_scaled[1]))):
-                self.get_logger().warn("Start is outside scaled fence; using direct go2waypoint.")
-                return [goal_xy]
-            if not self.fence.covers(ShapelyPoint(float(goal_scaled[0]), float(goal_scaled[1]))):
-                self.get_logger().warn("Goal is outside scaled fence; using direct go2waypoint.")
-                return [goal_xy]
+            if not self.fence.contains(ShapelyPoint(float(start_scaled[0]), float(start_scaled[1]))):
+                # Project the point onto the fence exterior boundary
+                point = ShapelyPoint(float(start_scaled[0]), float(start_scaled[1]))
+                nearest_point = nearest_points(self.fence.buffer(-0.5).exterior, point)[0]
+                start_scaled = np.array([nearest_point.x, nearest_point.y])
+                self.get_logger().warn("Start is outside scaled fence; using projected point.")
+            if not self.fence.contains(ShapelyPoint(float(goal_scaled[0]), float(goal_scaled[1]))):
+                point = ShapelyPoint(float(goal_scaled[0]), float(goal_scaled[1]))
+                nearest_point = nearest_points(self.fence.buffer(-0.5).exterior, point)[0]
+                goal_scaled = np.array([nearest_point.x, nearest_point.y])
+                self.get_logger().warn("Goal is outside scaled fence; using projected point.")
 
             try:
                 # find_shortest_path returns (path, distance)
