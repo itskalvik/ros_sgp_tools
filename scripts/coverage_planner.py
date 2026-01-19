@@ -67,10 +67,6 @@ class CoveragePathPlanner(BasePathPlanner):
             self.data_X = []
             self.data_y = []
 
-        fname = f"waypoints_{self.current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
-        X_data_plot = self.X_scaler.transform(X_train) if X_train.size > 0 else None
-        self.plot_paths(fname, self.waypoints, X_data=X_data_plot, update_waypoint=0)
-
         # Store copy of init data in hdf5
         self.data_file.create_dataset(
             "X_init",
@@ -87,6 +83,9 @@ class CoveragePathPlanner(BasePathPlanner):
 
         X_train_scaled = self.X_scaler.transform(X_train)
         y_train_scaled = (y_train - np.mean(y_train, axis=0)) / (np.std(y_train, axis=0) + 1e-6)
+
+        fname = f"waypoints_{self.current_waypoint}-{strftime('%H-%M-%S', gmtime())}"
+        self.plot_paths(fname, self.waypoints, X_data=X_train_scaled, update_waypoint=0)
 
         hyper_cfg = self.config["hyperparameters"]
         self.kernel_name = hyper_cfg["kernel_function"]
@@ -106,7 +105,7 @@ class CoveragePathPlanner(BasePathPlanner):
             verbose=False,
         )
 
-        prior_mean, prior_var = init_model.predict_f(self.X_objective)
+        _, prior_var = init_model.predict_f(self.X_objective)
         max_prior_var = float(prior_var.numpy().max())
         self.get_logger().info(f"Max prior variance on objective set: {max_prior_var:.4f}")
 
@@ -188,11 +187,9 @@ class CoveragePathPlanner(BasePathPlanner):
 
             with self.waypoints_lock:
                 self.waypoints = self.coverage_waypoints
-                lat_lon_waypoints = self.X_scaler.inverse_transform(self.waypoints)
-                self.distances = haversine(lat_lon_waypoints[1:], lat_lon_waypoints[:-1])
-
-                waypoint = self.waypoints[self.current_waypoint].reshape(1, -1)
-                waypoint = self.X_scaler.inverse_transform(waypoint)[0]
+                abs_waypoints = self.X_scaler.inverse_transform(self.waypoints)
+                self.distances = haversine(abs_waypoints[1:], abs_waypoints[:-1])
+                waypoint = abs_waypoints[self.current_waypoint]
 
             response.new_waypoint = True
             response.waypoint = Point(x=float(waypoint[0]), y=float(waypoint[1]))
