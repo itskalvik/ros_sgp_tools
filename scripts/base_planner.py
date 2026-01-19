@@ -184,8 +184,8 @@ class BasePathPlanner(Node):
 
         self.X_objective = self.X_scaler.transform(self.X_objective,
                                                    force_origin=force_origin).astype(default_float())
-        self.fence_vertices_local = self.X_scaler.transform(self.fence_vertices,
-                                                            force_origin=force_origin)
+        self.fence_vertices = self.X_scaler.transform(self.fence_vertices,
+                                                      force_origin=force_origin)
 
         self.start_location = self.X_scaler.transform(np.array([self.start_location[:2]]),
                                                       force_origin=force_origin).astype(
@@ -221,7 +221,7 @@ class BasePathPlanner(Node):
             "fence_vertices",
             self.fence_vertices.shape,
             dtype=np.float64,
-            data=self.fence_vertices,
+            data=self.X_scaler.inverse_transform(self.fence_vertices),
         )
 
         self.data_file.create_dataset(

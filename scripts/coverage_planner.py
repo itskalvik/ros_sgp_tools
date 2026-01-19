@@ -126,7 +126,7 @@ class CoveragePathPlanner(BasePathPlanner):
             X_objective=self.X_objective,
             kernel=kernel,
             noise_variance=noise_variance,
-            pbounds=self.fence_vertices_local,
+            pbounds=self.fence_vertices,
         )
 
         self.get_logger().info(f"Running coverage planner optimize() with method={method_name}...")
