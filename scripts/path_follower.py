@@ -117,16 +117,16 @@ def build_path_follower_node(controller_name: str):
 
             if controller_name == "aqua2":
                 origin = start_location
-                self.force_origin = True
+                force_origin = True
             else:
                 origin = None
-                self.force_origin = False
+                force_origin = False
 
             self.X_scaler = LatLonStandardScaler()
             self.X_scaler.fit(X_objective, origin=origin)
 
             fence_vertices_scaled = self.X_scaler.transform(
-                fence_vertices, force_origin=self.force_origin
+                fence_vertices, force_origin=force_origin
             )
             self.fence = Polygon(fence_vertices_scaled)
 
@@ -162,24 +162,24 @@ def build_path_follower_node(controller_name: str):
 
             # --- REQUIRED: use X_scaler for transforms ---
             start_scaled = self.X_scaler.transform(
-                np.array(start_raw).reshape(1, -1), force_origin=self.force_origin
-            )[0]
+                np.array(start_raw).reshape(1, -1))[0]
             goal_scaled = self.X_scaler.transform(
-                np.array(goal_raw).reshape(1, -1), force_origin=self.force_origin
-            )[0]
+                np.array(goal_raw).reshape(1, -1))[0]
 
             # Ensure points are inside the (scaled) fence
             if not self.fence.contains(ShapelyPoint(float(start_scaled[0]), float(start_scaled[1]))):
                 # Project the point onto the fence exterior boundary
+                self.get_logger().warn(f"Start is outside scaled fence: {start_scaled}")
                 point = ShapelyPoint(float(start_scaled[0]), float(start_scaled[1]))
                 nearest_point = nearest_points(self.fence.buffer(-0.5).exterior, point)[0]
                 start_scaled = np.array([nearest_point.x, nearest_point.y])
-                self.get_logger().warn("Start is outside scaled fence; using projected point.")
+                self.get_logger().warn(f"using projected point: {start_scaled}.")
             if not self.fence.contains(ShapelyPoint(float(goal_scaled[0]), float(goal_scaled[1]))):
+                self.get_logger().warn(f"Goal is outside scaled fence: {goal_scaled}")
                 point = ShapelyPoint(float(goal_scaled[0]), float(goal_scaled[1]))
                 nearest_point = nearest_points(self.fence.buffer(-0.5).exterior, point)[0]
                 goal_scaled = np.array([nearest_point.x, nearest_point.y])
-                self.get_logger().warn("Goal is outside scaled fence; using projected point.")
+                self.get_logger().warn(f"using projected point: {goal_scaled}.")
 
             try:
                 # find_shortest_path returns (path, distance)
