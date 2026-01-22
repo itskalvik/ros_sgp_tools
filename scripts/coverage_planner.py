@@ -81,6 +81,8 @@ class CoveragePathPlanner(BasePathPlanner):
             data=y_train,
         )
 
+        if self.navigation == "DVL":
+            X_train -= X_train[0] # Center data around first point (start location; origin)
         X_train_scaled = self.X_scaler.transform(X_train)
         y_train_scaled = (y_train - np.mean(y_train, axis=0)) / (np.std(y_train, axis=0) + 1e-6)
 
