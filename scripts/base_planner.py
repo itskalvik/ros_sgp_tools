@@ -173,8 +173,8 @@ class BasePathPlanner(Node):
 
         # Set origin when using DVL to use local/relative coords
         robot_cfg = self.config.get("robot", {})
-        self.navigation = robot_cfg.get("navigation", "GPS")
-        if self.navigation == "DVL":
+        navigation = robot_cfg.get("navigation", "GPS")
+        if navigation == "DVL":
             origin = self.start_location
             force_origin = True
         else:

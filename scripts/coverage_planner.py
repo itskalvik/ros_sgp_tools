@@ -48,6 +48,9 @@ class CoveragePathPlanner(BasePathPlanner):
         self.waypoints = X_init
         if self.waypoints is None:
             raise RuntimeError("Coverage mission failed to initialize initial waypoints.")
+        
+        self.get_logger().info(f"Initial coverage path has {len(self.waypoints)} waypoints.")
+        input("Press Enter to continue...")
 
     def _should_request_shutdown_on_completion(self) -> bool:
         # Don't shutdown when the initial phase ends; only after coverage phase ends.
@@ -81,8 +84,6 @@ class CoveragePathPlanner(BasePathPlanner):
             data=y_train,
         )
 
-        if self.navigation == "DVL":
-            X_train -= X_train[0] # Center data around first point (start location; origin)
         X_train_scaled = self.X_scaler.transform(X_train)
         y_train_scaled = (y_train - np.mean(y_train, axis=0)) / (np.std(y_train, axis=0) + 1e-6)
 
@@ -167,6 +168,8 @@ class CoveragePathPlanner(BasePathPlanner):
         with open(fname, 'wb') as handle:
             pickle.dump(params, handle, protocol=pickle.HIGHEST_PROTOCOL)
         self.get_logger().info(f"Saved GP model hyperparameters.")
+
+        input("Press Enter to continue...")
 
     def waypoint_service_callback(self, request, response):
         # Phase-aware waypoint service (same behavior as your original)

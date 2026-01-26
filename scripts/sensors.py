@@ -27,11 +27,11 @@ class GPS(SensorCallback):
     
 class DVL(SensorCallback):
     def __init__(self, namespace='a14'):
-        self.topic = f"/{namespace}/dvl/position_estimate"
+        self.topic = f"/{namespace}/navigation/local_position"
 
     def get_subscriber(self, node_obj, callback_group=None):
-        from geometry_msgs.msg import PoseWithCovarianceStamped
-        sub =  Subscriber(node_obj, PoseWithCovarianceStamped,
+        from nav_msgs.msg import Odometry
+        sub =  Subscriber(node_obj, Odometry,
                           self.topic,
                           qos_profile=qos_profile_sensor_data,
                           callback_group=callback_group)

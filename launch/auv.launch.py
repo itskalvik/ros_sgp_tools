@@ -55,6 +55,7 @@ def generate_launch_description():
                              'config_file': config_file,
                              'data_folder': data_folder
                             }],
+                        prefix='xterm -e',
                         output='screen')
     nodes.append(path_planner)
 
