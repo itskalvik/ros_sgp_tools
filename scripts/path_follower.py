@@ -91,10 +91,10 @@ def build_path_follower_node(controller_name: str):
                 )
 
             self._shutdown_requested: bool = False
-            self.waypoint_service = WaypointServiceClient()
-
             self._get_fence()
             self._init_planner()
+
+            self.waypoint_service = WaypointServiceClient()
 
             self.mission()
 
